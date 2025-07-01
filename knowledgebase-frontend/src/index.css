@@ -1,8 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* 2. Replace the content of your src/index.css file with this */
 
 body {
+  font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -10,8 +9,8 @@ body {
 .main-bg {
   background-color: #111827; /* A very dark blue-gray */
   background-image: 
-    radial-gradient(circle at 25% 25%, rgba(245, 158, 11, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 75% 75%, rgba(245, 158, 11, 0.05) 0%, transparent 40%);
+    radial-gradient(circle at 25% 25%, rgba(217, 119, 6, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 75% 75%, rgba(217, 119, 6, 0.05) 0%, transparent 40%);
 }
 
 /* Simple fade-in-up animation */
