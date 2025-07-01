@@ -4,15 +4,18 @@ import { getFirestore, collection, addDoc, onSnapshot } from 'firebase/firestore
 import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 
 // --- Configuration ---
+// src/App.jsx
+
 const firebaseConfig = {
-    apiKey: "AIzaSyBQJ7g2uIMo9PqQkRTqEk4pfdiKlzAlU4o",
-    authDomain: "knowledgebase-manager.firebaseapp.com",
-    projectId: "knowledgebase-manager",
-    storageBucket: "knowledgebase-manager.appspot.com",
-    messagingSenderId: "354377835912",
-    appId: "1:354377835912:web:472455a97133208440863d"
+  apiKey: "AIzaSyBQJ7g2uIMo9PqQkRTqEk4pfdiKlzAlU4o",
+  authDomain: "knowledgebase-manager.firebaseapp.com",
+  projectId: "knowledgebase-manager",
+  storageBucket: "knowledgebase-manager.firebasestorage.app",
+  messagingSenderId: "354377835912",
+  appId: "1:354377835912:web:472455a97133208440863d",
+  measurementId: "G-K4VM7631N2"
 };
-const geminiApiKey = "YOUR_GEMINI_API_KEY"; // <-- PASTE YOUR GEMINI API KEY HERE
+const geminiApiKey = "AIzaSyAEYjREpf-Mm9YmTg01SfUhYreoIzMltl8";
 const BACKEND_URL = "http://localhost:3001";
 const appId = 'knowledgebase-saas-local-dev';
 
@@ -37,19 +40,13 @@ const EmptyStateArt = () => (
                 <stop offset="100%" style={{stopColor: '#d97706', stopOpacity: 1}} />
             </linearGradient>
         </defs>
-        {/* Abstract background shapes */}
         <path d="M 50 300 Q 150 200 250 250 T 450 50" stroke="#374151" fill="transparent" strokeWidth="1" strokeDasharray="5,5"/>
         <path d="M 0 150 Q 100 50 200 100 T 400 200" stroke="#374151" fill="transparent" strokeWidth="1" strokeDasharray="5,5"/>
-
-        {/* Central glowing orb */}
         <circle cx="200" cy="150" r="40" fill="url(#grad1)" filter="url(#glow)" />
         <circle cx="200" cy="150" r="35" fill="none" stroke="#fbbf24" strokeWidth="1.5" />
-        
-        {/* Orbiting data points */}
         <circle cx="200" cy="150" r="70" stroke="#4b5563" strokeWidth="0.5" fill="none" />
         <circle cx="270" cy="150" r="5" fill="#f59e0b" />
         <circle cx="130" cy="150" r="3" fill="#d97706" />
-
         <circle cx="200" cy="150" r="110" stroke="#4b5563" strokeWidth="0.5" fill="none" strokeDasharray="2,2"/>
         <circle cx="200" cy="40" r="6" fill="#f59e0b" />
         <circle cx="90" cy="150" r="4" fill="#d97706" />
