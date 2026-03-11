@@ -394,6 +394,17 @@ body {
   --tw-ring-color: var(--primary);
 }
 
+/* Reading Mode Styles */
+.reading-content {
+  text-align: justify;
+  text-justify: inter-word;
+}
+
+.reading-content .font-arabic {
+  display: inline;
+  word-spacing: 0.1em;
+}
+
 /* Input number styles */
 input[type="number"] {
   -moz-appearance: textfield;
@@ -403,4 +414,22 @@ input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+/* Mobile touch targets */
+@media (max-width: 768px) {
+  .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .tab {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+  }
+  
+  .arabic-text-sm { font-size: 1.125rem; }
+  .arabic-text-md { font-size: 1.5rem; }
+  .arabic-text-lg { font-size: 2rem; }
+  .arabic-text-xl { font-size: 2.5rem; }
 }

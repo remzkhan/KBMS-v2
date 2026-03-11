@@ -776,7 +776,7 @@ function ReaderView({
   const [showTransliteration, setShowTransliteration] = useState(settings.show_transliteration);
   const [viewMode, setViewMode] = useState(settings.view_mode || 'scroll');
   const [currentPage, setCurrentPage] = useState(0);
-  const ayahsPerPage = 10;
+  const ayahsPerPage = viewMode === 'reading' ? 5 : 10;
   
   if (loading) {
     return (
@@ -793,9 +793,113 @@ function ReaderView({
   }
 
   const totalPages = Math.ceil((surahData.ayahs?.length || 0) / ayahsPerPage);
-  const displayedAyahs = viewMode === 'book' 
+  const displayedAyahs = (viewMode === 'reading' || viewMode === 'book')
     ? surahData.ayahs?.slice(currentPage * ayahsPerPage, (currentPage + 1) * ayahsPerPage)
     : surahData.ayahs;
+
+  // Reading mode - immersive full document style
+  if (viewMode === 'reading') {
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: 'var(--surface)' }}>
+        {/* Minimal Header */}
+        <div className="sticky top-0 z-20 glass border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="container-fluid py-3 flex items-center justify-between">
+            <button className="icon-btn" onClick={onBack}>
+              <ChevronLeft size={20} />
+            </button>
+            <div className="text-center">
+              <span className="font-semibold" style={{ color: 'var(--text)' }}>{surahData.englishName}</span>
+              <span className="mx-2" style={{ color: 'var(--muted)' }}>•</span>
+              <span className="font-arabic" style={{ color: 'var(--primary)' }}>{surahData.name}</span>
+            </div>
+            <button 
+              className="icon-btn"
+              onClick={() => setViewMode('scroll')}
+              title="Exit Reading Mode"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Reading Content - RTL Document Style */}
+        <div className="max-w-4xl mx-auto px-4 md:px-8 py-8" dir="rtl">
+          {/* Bismillah */}
+          {surahData.number !== 1 && surahData.number !== 9 && (
+            <div className="text-center py-8 mb-8 border-b" style={{ borderColor: 'var(--border)' }}>
+              <p className="font-arabic text-3xl" style={{ color: 'var(--primary)' }}>
+                بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+              </p>
+            </div>
+          )}
+
+          {/* Continuous Text Flow */}
+          <div className="reading-content">
+            {displayedAyahs?.map((ayah, idx) => (
+              <span key={ayah.number} className="inline">
+                <span 
+                  className={`font-arabic ${textSizeClass.arabicClass} leading-[2.5] cursor-pointer hover:text-primary transition-colors ${currentAyah === ayah.number ? 'text-primary' : ''}`}
+                  style={{ color: currentAyah === ayah.number ? 'var(--primary)' : 'var(--text)' }}
+                  onClick={() => onPlayAyah(ayah.number)}
+                >
+                  {ayah.arabic}
+                </span>
+                <span 
+                  className="inline-flex items-center justify-center w-8 h-8 mx-1 rounded-full text-xs font-semibold"
+                  style={{ backgroundColor: 'var(--primary)', color: 'white' }}
+                >
+                  {ayah.number}
+                </span>
+                {' '}
+              </span>
+            ))}
+          </div>
+
+          {/* Translation Section */}
+          {showTranslation && (
+            <div className="mt-12 pt-8 border-t" style={{ borderColor: 'var(--border)' }} dir="ltr">
+              <h3 className="text-lg font-semibold mb-6" style={{ color: 'var(--text)' }}>Translation</h3>
+              <div className="space-y-4">
+                {displayedAyahs?.map((ayah) => (
+                  <div key={ayah.number} className="flex gap-4">
+                    <span className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm" style={{ backgroundColor: 'rgba(4, 120, 87, 0.1)', color: 'var(--primary)' }}>
+                      {ayah.number}
+                    </span>
+                    <p className={`${textSizeClass.translationClass} leading-relaxed`} style={{ color: 'var(--text)' }}>
+                      {ayah.translation}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Page Navigation */}
+        {totalPages > 1 && (
+          <div className="sticky bottom-0 glass border-t py-4" style={{ borderColor: 'var(--border)' }}>
+            <div className="container-fluid flex items-center justify-center gap-4">
+              <button 
+                className="btn-secondary"
+                onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                disabled={currentPage === 0}
+              >
+                <ChevronRight size={18} className="inline" /> السابق
+              </button>
+              <span style={{ color: 'var(--muted)' }}>صفحة {currentPage + 1} من {totalPages}</span>
+              <button 
+                className="btn-primary"
+                onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={currentPage >= totalPages - 1}
+              >
+                التالي <ChevronLeft size={18} className="inline" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="container-fluid py-8">
@@ -838,10 +942,10 @@ function ReaderView({
           <Type size={16} className="inline mr-2" />Transliteration
         </button>
         <button 
-          className={`tab ${viewMode === 'book' ? 'tab-active' : 'tab-inactive'}`}
-          onClick={() => setViewMode(viewMode === 'scroll' ? 'book' : 'scroll')}
+          className={`tab ${viewMode === 'reading' ? 'tab-active' : 'tab-inactive'}`}
+          onClick={() => setViewMode('reading')}
         >
-          <BookOpen size={16} className="inline mr-2" />{viewMode === 'book' ? 'Book View' : 'Scroll View'}
+          <BookOpen size={16} className="inline mr-2" />Reading Mode
         </button>
       </div>
 
@@ -851,7 +955,7 @@ function ReaderView({
       )}
 
       {/* Ayahs */}
-      <div className={`max-w-3xl mx-auto ${viewMode === 'book' ? 'book-view' : 'space-y-4'}`}>
+      <div className="max-w-3xl mx-auto space-y-4">
         {displayedAyahs?.map((ayah, idx) => {
           const transliteration = transliterationData?.find(t => t.number === ayah.number);
           return (
@@ -875,27 +979,6 @@ function ReaderView({
           );
         })}
       </div>
-
-      {/* Book View Pagination */}
-      {viewMode === 'book' && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4 mt-8">
-          <button 
-            className="btn-secondary"
-            onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-            disabled={currentPage === 0}
-          >
-            <ChevronLeft size={18} className="inline" /> Previous
-          </button>
-          <span style={{ color: 'var(--muted)' }}>Page {currentPage + 1} of {totalPages}</span>
-          <button 
-            className="btn-primary"
-            onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-            disabled={currentPage >= totalPages - 1}
-          >
-            Next <ChevronRight size={18} className="inline" />
-          </button>
-        </div>
-      )}
 
       {/* Surah Navigation */}
       <div className="flex items-center justify-between max-w-3xl mx-auto mt-12 pt-8 border-t" style={{ borderColor: 'var(--border)' }}>
@@ -1331,25 +1414,72 @@ function HifzView({ surahs, hifzProgress, hifzStats, onSelectSurah, onRefresh })
   const [currentPracticeAyah, setCurrentPracticeAyah] = useState(0);
   const [showText, setShowText] = useState(true);
   const [repetitions, setRepetitions] = useState(0);
+  const [practiceAyahs, setPracticeAyahs] = useState([]);
+  const [loadingAyahs, setLoadingAyahs] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const practiceAudioRef = useRef(null);
 
   const surahInfo = surahs.find(s => s.number === selectedSurah);
 
   const startPractice = async () => {
     if (!selectedSurah) return;
     
-    // Save progress
-    await api.saveHifzProgress({
-      surah_number: selectedSurah,
-      ayah_start: ayahStart,
-      ayah_end: ayahEnd,
-      status: 'learning',
-      repetitions: 0
-    });
+    setLoadingAyahs(true);
+    try {
+      // Fetch the ayahs for practice
+      const res = await api.getSurah(selectedSurah, 'quran-uthmani', 'en.sahih');
+      if (res.surah?.ayahs) {
+        const ayahs = res.surah.ayahs.filter(
+          a => a.number >= ayahStart && a.number <= ayahEnd
+        );
+        setPracticeAyahs(ayahs);
+      }
+      
+      // Save progress
+      await api.saveHifzProgress({
+        surah_number: selectedSurah,
+        ayah_start: ayahStart,
+        ayah_end: ayahEnd,
+        status: 'learning',
+        repetitions: 0
+      });
+      
+      setPracticeMode(true);
+      setCurrentPracticeAyah(ayahStart);
+      setRepetitions(0);
+      onRefresh();
+    } catch (err) {
+      console.error('Failed to load ayahs:', err);
+    }
+    setLoadingAyahs(false);
+  };
+
+  const getCurrentAyahData = () => {
+    return practiceAyahs.find(a => a.number === currentPracticeAyah);
+  };
+
+  const playCurrentAyah = async () => {
+    const ayahData = getCurrentAyahData();
+    if (!ayahData || !selectedSurah) return;
     
-    setPracticeMode(true);
-    setCurrentPracticeAyah(ayahStart);
-    setRepetitions(0);
-    onRefresh();
+    try {
+      const res = await api.getAyahAudio(selectedSurah, currentPracticeAyah, 'Alafasy_128kbps');
+      if (res.audio?.url && practiceAudioRef.current) {
+        practiceAudioRef.current.src = res.audio.url;
+        practiceAudioRef.current.play();
+        setIsPlayingAudio(true);
+      }
+    } catch (err) {
+      console.error('Failed to play audio:', err);
+    }
+  };
+
+  const stopAudio = () => {
+    if (practiceAudioRef.current) {
+      practiceAudioRef.current.pause();
+      practiceAudioRef.current.currentTime = 0;
+    }
+    setIsPlayingAudio(false);
   };
 
   const completeRepetition = async () => {
@@ -1369,8 +1499,27 @@ function HifzView({ surahs, hifzProgress, hifzStats, onSelectSurah, onRefresh })
     onRefresh();
   };
 
+  const exitPractice = () => {
+    stopAudio();
+    setPracticeMode(false);
+    setPracticeAyahs([]);
+  };
+
+  // Audio ended handler
+  useEffect(() => {
+    const audio = practiceAudioRef.current;
+    if (audio) {
+      const handleEnded = () => setIsPlayingAudio(false);
+      audio.addEventListener('ended', handleEnded);
+      return () => audio.removeEventListener('ended', handleEnded);
+    }
+  }, []);
+
   return (
     <div className="container-fluid py-8">
+      {/* Hidden audio element for practice */}
+      <audio ref={practiceAudioRef} />
+      
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--text)' }}>
           <Brain className="inline mr-2" size={32} /> Hifz - Memorization
@@ -1425,7 +1574,7 @@ function HifzView({ surahs, hifzProgress, hifzStats, onSelectSurah, onRefresh })
                         min="1" 
                         max={surahInfo.numberOfAyahs}
                         value={ayahStart}
-                        onChange={(e) => setAyahStart(parseInt(e.target.value))}
+                        onChange={(e) => setAyahStart(Math.max(1, parseInt(e.target.value) || 1))}
                         className="search-input text-center"
                       />
                     </div>
@@ -1436,7 +1585,7 @@ function HifzView({ surahs, hifzProgress, hifzStats, onSelectSurah, onRefresh })
                         min={ayahStart} 
                         max={surahInfo.numberOfAyahs}
                         value={ayahEnd}
-                        onChange={(e) => setAyahEnd(parseInt(e.target.value))}
+                        onChange={(e) => setAyahEnd(Math.max(ayahStart, parseInt(e.target.value) || ayahStart))}
                         className="search-input text-center"
                       />
                     </div>
@@ -1448,8 +1597,16 @@ function HifzView({ surahs, hifzProgress, hifzStats, onSelectSurah, onRefresh })
                     </p>
                   </div>
 
-                  <button className="btn-primary w-full" onClick={startPractice}>
-                    <Brain className="inline mr-2" size={18} /> Start Memorization
+                  <button 
+                    className="btn-primary w-full" 
+                    onClick={startPractice}
+                    disabled={loadingAyahs}
+                  >
+                    {loadingAyahs ? (
+                      <span>Loading...</span>
+                    ) : (
+                      <><Brain className="inline mr-2" size={18} /> Start Memorization</>
+                    )}
                   </button>
                 </>
               )}
@@ -1475,13 +1632,28 @@ function HifzView({ surahs, hifzProgress, hifzStats, onSelectSurah, onRefresh })
                         </span>
                         <button 
                           className="btn-primary text-sm py-2 px-3"
-                          onClick={() => {
+                          onClick={async () => {
                             setSelectedSurah(p.surah_number);
                             setAyahStart(p.ayah_start);
                             setAyahEnd(p.ayah_end);
-                            setRepetitions(p.repetitions);
-                            setPracticeMode(true);
-                            setCurrentPracticeAyah(p.ayah_start);
+                            setRepetitions(p.repetitions || 0);
+                            
+                            // Load ayahs
+                            setLoadingAyahs(true);
+                            try {
+                              const res = await api.getSurah(p.surah_number, 'quran-uthmani', 'en.sahih');
+                              if (res.surah?.ayahs) {
+                                const ayahs = res.surah.ayahs.filter(
+                                  a => a.number >= p.ayah_start && a.number <= p.ayah_end
+                                );
+                                setPracticeAyahs(ayahs);
+                              }
+                              setPracticeMode(true);
+                              setCurrentPracticeAyah(p.ayah_start);
+                            } catch (err) {
+                              console.error('Failed to load ayahs:', err);
+                            }
+                            setLoadingAyahs(false);
                           }}
                         >
                           Continue
@@ -1515,13 +1687,16 @@ function HifzView({ surahs, hifzProgress, hifzStats, onSelectSurah, onRefresh })
               <h3 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
                 {surahInfo?.englishName} • Ayahs {ayahStart}-{ayahEnd}
               </h3>
-              <button className="icon-btn" onClick={() => setPracticeMode(false)}>
+              <button className="icon-btn" onClick={exitPractice}>
                 <X size={20} />
               </button>
             </div>
 
-            <div className="flex items-center justify-center gap-4 mb-6">
+            <div className="flex items-center justify-center gap-4 mb-6 flex-wrap">
               <span className="badge badge-primary">Repetitions: {repetitions}</span>
+              <span className="badge badge-secondary">
+                {repetitions >= 10 ? 'Memorized!' : repetitions >= 5 ? 'Reviewing' : 'Learning'}
+              </span>
               <button 
                 className={`tab ${showText ? 'tab-active' : 'tab-inactive'}`}
                 onClick={() => setShowText(!showText)}
@@ -1533,40 +1708,55 @@ function HifzView({ surahs, hifzProgress, hifzStats, onSelectSurah, onRefresh })
 
             {/* Current Ayah Display */}
             <div className="text-center py-8 px-4 rounded-lg mb-6" style={{ backgroundColor: 'var(--background)' }}>
-              <p className="text-sm mb-2" style={{ color: 'var(--muted)' }}>Ayah {currentPracticeAyah}</p>
+              <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>Ayah {currentPracticeAyah}</p>
+              
               {showText ? (
-                <p className="font-arabic text-3xl leading-loose" style={{ color: 'var(--primary)' }} dir="rtl">
-                  [Load ayah text here - Click Play to hear]
-                </p>
+                <div>
+                  <p className="font-arabic text-3xl md:text-4xl leading-[2]" style={{ color: 'var(--primary)' }} dir="rtl">
+                    {getCurrentAyahData()?.arabic || 'Loading...'}
+                  </p>
+                  {getCurrentAyahData()?.translation && (
+                    <p className="mt-4 text-lg" style={{ color: 'var(--text)', opacity: 0.8 }}>
+                      {getCurrentAyahData()?.translation}
+                    </p>
+                  )}
+                </div>
               ) : (
-                <p className="text-xl" style={{ color: 'var(--muted)' }}>Text hidden - try to recite from memory</p>
+                <div className="py-8">
+                  <EyeOff size={48} className="mx-auto mb-4" style={{ color: 'var(--muted)' }} />
+                  <p className="text-xl" style={{ color: 'var(--muted)' }}>Text hidden - recite from memory</p>
+                  <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>Click "Show Text" to check yourself</p>
+                </div>
               )}
             </div>
 
-            {/* Controls */}
+            {/* Audio & Navigation Controls */}
             <div className="flex items-center justify-center gap-4">
               <button 
                 className="icon-btn"
                 disabled={currentPracticeAyah <= ayahStart}
-                onClick={() => setCurrentPracticeAyah(p => p - 1)}
+                onClick={() => { stopAudio(); setCurrentPracticeAyah(p => p - 1); }}
               >
                 <SkipBack size={20} />
               </button>
               
-              <button className="icon-btn icon-btn-primary w-14 h-14">
-                <Play size={24} />
+              <button 
+                className={`icon-btn ${isPlayingAudio ? '' : 'icon-btn-primary'} w-14 h-14`}
+                onClick={isPlayingAudio ? stopAudio : playCurrentAyah}
+              >
+                {isPlayingAudio ? <Pause size={24} /> : <Play size={24} />}
               </button>
               
               <button 
                 className="icon-btn"
                 disabled={currentPracticeAyah >= ayahEnd}
-                onClick={() => setCurrentPracticeAyah(p => p + 1)}
+                onClick={() => { stopAudio(); setCurrentPracticeAyah(p => p + 1); }}
               >
                 <SkipForward size={20} />
               </button>
             </div>
 
-            {/* Progress */}
+            {/* Progress Bar */}
             <div className="mt-6">
               <div className="progress-bar">
                 <div 
@@ -1580,13 +1770,26 @@ function HifzView({ surahs, hifzProgress, hifzStats, onSelectSurah, onRefresh })
             </div>
           </div>
 
-          <div className="flex justify-center gap-4">
+          {/* Action Buttons */}
+          <div className="flex justify-center gap-4 flex-wrap">
             <button className="btn-secondary" onClick={() => setRepetitions(0)}>
               <RotateCcw size={18} className="inline mr-2" /> Reset Reps
             </button>
             <button className="btn-primary" onClick={completeRepetition}>
               <Check size={18} className="inline mr-2" /> Complete Round ({repetitions + 1})
             </button>
+          </div>
+
+          {/* Instructions */}
+          <div className="mt-8 p-4 rounded-lg" style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <h4 className="font-semibold mb-2" style={{ color: 'var(--text)' }}>How to Practice:</h4>
+            <ol className="list-decimal list-inside space-y-1 text-sm" style={{ color: 'var(--muted)' }}>
+              <li>Listen to the ayah by clicking the play button</li>
+              <li>Repeat after the reciter multiple times</li>
+              <li>Hide the text and try to recite from memory</li>
+              <li>Click "Complete Round" after each full recitation</li>
+              <li>After 10 repetitions, the ayah is marked as memorized</li>
+            </ol>
           </div>
         </div>
       )}
