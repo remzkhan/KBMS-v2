@@ -84,12 +84,16 @@ async def get_surah(
     translation: str = Query("en.sahih", description="Translation edition")
 ):
     """Get a surah with Arabic text and translation"""
+    # Validate surah number range
+    if surah_number < 1 or surah_number > 114:
+        raise HTTPException(status_code=404, detail=f"Surah {surah_number} not found. Valid range is 1-114.")
+    
     async with httpx.AsyncClient(timeout=30.0) as client:
         # Fetch Arabic text and translation in parallel
         editions = f"{edition},{translation}"
         response = await client.get(f"{ALQURAN_BASE}/surah/{surah_number}/editions/{editions}")
         if response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Failed to fetch surah")
+            raise HTTPException(status_code=404, detail=f"Surah {surah_number} not found")
         data = response.json()
         
         if data.get("code") != 200:

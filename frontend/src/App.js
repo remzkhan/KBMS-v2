@@ -305,12 +305,17 @@ function App() {
     }
   };
 
-  // Filter surahs
-  const filteredSurahs = surahs.filter(s => 
-    s.englishName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.name?.includes(searchQuery) ||
-    s.number?.toString().includes(searchQuery)
-  );
+  // Filter surahs - search by English name, Arabic name, translation, and number
+  const filteredSurahs = surahs.filter(s => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return true;
+    return (
+      s.englishName?.toLowerCase().includes(query) ||
+      s.englishNameTranslation?.toLowerCase().includes(query) ||
+      s.name?.includes(searchQuery) ||  // Arabic text search (case-sensitive)
+      s.number?.toString() === query
+    );
+  });
 
   const getTextSizeClass = () => {
     return TEXT_SIZES.find(s => s.id === settings.text_size) || TEXT_SIZES[2];
