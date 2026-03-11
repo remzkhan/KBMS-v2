@@ -351,3 +351,50 @@ body {
   opacity: 1;
   visibility: visible;
 }
+
+/* Tajweed Colors */
+.tajweed-ghunnah { color: #10B981; }
+.tajweed-ikhfa { color: #3B82F6; }
+.tajweed-idgham { color: #8B5CF6; }
+.tajweed-iqlab { color: #F59E0B; }
+.tajweed-qalqalah { color: #EF4444; }
+.tajweed-madd { color: #EC4899; }
+
+/* Book View */
+.book-view {
+  column-count: 2;
+  column-gap: 3rem;
+  column-rule: 1px solid var(--border);
+}
+
+@media (max-width: 768px) {
+  .book-view {
+    column-count: 1;
+  }
+}
+
+.book-ayah {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin-bottom: 1.5rem;
+}
+
+/* Ring for selected items */
+.ring-2 {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.ring-primary {
+  --tw-ring-color: var(--primary);
+}
+
+/* Input number styles */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

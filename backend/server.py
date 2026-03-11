@@ -52,8 +52,11 @@ class UserSettings(BaseModel):
     text_style: str = "uthmani"
     reciter_id: str = "7"
     translation: str = "en.sahih"
+    transliteration: str = "en.transliteration"
     text_size: str = "large"
     theme: str = "dark"
+    show_tajweed: bool = True
+    view_mode: str = "scroll"  # scroll, book
 
 class ReadingProgress(BaseModel):
     surah_number: int
@@ -185,6 +188,50 @@ async def get_editions():
         }
 
 # ==================== AUDIO / RECITERS ====================
+
+@app.get("/api/reciters/v2")
+async def get_reciters_v2():
+    """Get available reciters with everyayah.com support"""
+    reciters = [
+        {"id": "Alafasy_128kbps", "name": "Mishary Rashid Alafasy", "style": "Murattal"},
+        {"id": "Abdul_Basit_Murattal_128kbps", "name": "Abdul Basit Abdul Samad", "style": "Murattal"},
+        {"id": "Husary_128kbps", "name": "Mahmoud Khalil Al-Husary", "style": "Murattal"},
+        {"id": "Minshawy_Murattal_128kbps", "name": "Mohamed Siddiq El-Minshawi", "style": "Murattal"},
+        {"id": "Maher_AlMuaiqly_128kbps", "name": "Maher Al Muaiqly", "style": "Murattal"},
+        {"id": "Sudais_128kbps", "name": "Abdul Rahman Al-Sudais", "style": "Murattal"},
+        {"id": "Shuraym_128kbps", "name": "Saud Al-Shuraim", "style": "Murattal"},
+        {"id": "Saad_AlGhamdi_128kbps", "name": "Saad Al-Ghamdi", "style": "Murattal"},
+    ]
+    return {"reciters": reciters}
+
+@app.get("/api/audio/ayah/v2/{surah_number}/{ayah_number}")
+async def get_ayah_audio_v2(surah_number: int, ayah_number: int, reciter: str = "Alafasy_128kbps"):
+    """Get audio URL for a specific ayah using everyayah.com (more reliable)"""
+    reciters_map = {
+        "Alafasy_128kbps": "Alafasy_128kbps",
+        "Abdul_Basit_Murattal_128kbps": "Abdul_Basit_Murattal_128kbps",
+        "Husary_128kbps": "Husary_128kbps",
+        "Minshawy_Murattal_128kbps": "Minshawy_Murattal_128kbps",
+        "Maher_AlMuaiqly_128kbps": "Maher_AlMuaiqly_128kbps",
+        "Sudais_128kbps": "Sudais_128kbps",
+        "Shuraym_128kbps": "Shuraym_128kbps",
+        "Saad_AlGhamdi_128kbps": "Saad_AlGhamdi_128kbps"
+    }
+    
+    reciter_folder = reciters_map.get(reciter, "Alafasy_128kbps")
+    padded_surah = str(surah_number).zfill(3)
+    padded_ayah = str(ayah_number).zfill(3)
+    
+    audio_url = f"https://everyayah.com/data/{reciter_folder}/{padded_surah}{padded_ayah}.mp3"
+    
+    return {
+        "audio": {
+            "url": audio_url,
+            "surah": surah_number,
+            "ayah": ayah_number,
+            "reciter": reciter_folder
+        }
+    }
 
 @app.get("/api/reciters")
 async def get_reciters():
@@ -660,6 +707,363 @@ async def get_arabic_grammar():
         ]
     }
     return {"grammar": grammar}
+
+# ==================== HIFZ (MEMORIZATION) ====================
+
+hifz_progress_collection = db["hifz_progress"]
+
+class HifzProgress(BaseModel):
+    surah_number: int
+    ayah_start: int
+    ayah_end: int
+    status: str = "learning"  # learning, reviewing, memorized
+    repetitions: int = 0
+    last_practiced: Optional[str] = None
+    accuracy_score: Optional[float] = None
+
+@app.get("/api/hifz/progress")
+async def get_hifz_progress():
+    """Get all Hifz memorization progress"""
+    progress = list(hifz_progress_collection.find({"user": "default"}, {"_id": 0}))
+    return {"progress": progress}
+
+@app.post("/api/hifz/progress")
+async def save_hifz_progress(progress: HifzProgress):
+    """Save or update Hifz progress"""
+    progress_dict = progress.model_dump()
+    progress_dict["user"] = "default"
+    progress_dict["last_practiced"] = datetime.now(timezone.utc).isoformat()
+    
+    hifz_progress_collection.update_one(
+        {
+            "user": "default",
+            "surah_number": progress.surah_number,
+            "ayah_start": progress.ayah_start,
+            "ayah_end": progress.ayah_end
+        },
+        {"$set": progress_dict},
+        upsert=True
+    )
+    return {"message": "Progress saved", "progress": progress_dict}
+
+@app.delete("/api/hifz/progress/{surah_number}/{ayah_start}/{ayah_end}")
+async def delete_hifz_progress(surah_number: int, ayah_start: int, ayah_end: int):
+    """Delete Hifz progress entry"""
+    result = hifz_progress_collection.delete_one({
+        "user": "default",
+        "surah_number": surah_number,
+        "ayah_start": ayah_start,
+        "ayah_end": ayah_end
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Progress entry not found")
+    return {"message": "Progress deleted"}
+
+@app.get("/api/hifz/stats")
+async def get_hifz_stats():
+    """Get Hifz statistics"""
+    all_progress = list(hifz_progress_collection.find({"user": "default"}, {"_id": 0}))
+    
+    total_ayahs_memorized = 0
+    total_ayahs_learning = 0
+    total_ayahs_reviewing = 0
+    surahs_in_progress = set()
+    
+    for p in all_progress:
+        count = p.get("ayah_end", 0) - p.get("ayah_start", 0) + 1
+        surahs_in_progress.add(p.get("surah_number"))
+        if p.get("status") == "memorized":
+            total_ayahs_memorized += count
+        elif p.get("status") == "reviewing":
+            total_ayahs_reviewing += count
+        else:
+            total_ayahs_learning += count
+    
+    return {
+        "stats": {
+            "total_ayahs_memorized": total_ayahs_memorized,
+            "total_ayahs_learning": total_ayahs_learning,
+            "total_ayahs_reviewing": total_ayahs_reviewing,
+            "surahs_in_progress": len(surahs_in_progress),
+            "total_entries": len(all_progress)
+        }
+    }
+
+# ==================== HADITH AYAHS LIST ====================
+
+@app.get("/api/hadith/ayahs-with-hadith")
+async def get_ayahs_with_hadith():
+    """Get list of all ayahs that have related hadith"""
+    # Return the list of surah:ayah combinations that have hadith
+    ayahs_with_hadith = [
+        {"surah": 1, "ayah": 1, "name": "Al-Faatiha"},
+        {"surah": 2, "ayah": 255, "name": "Ayatul Kursi"},
+        {"surah": 18, "ayah": 1, "name": "Surah Al-Kahf"},
+        {"surah": 36, "ayah": 1, "name": "Surah Yasin"},
+        {"surah": 55, "ayah": 13, "name": "Surah Ar-Rahman"},
+        {"surah": 67, "ayah": 1, "name": "Surah Al-Mulk"},
+        {"surah": 112, "ayah": 1, "name": "Surah Al-Ikhlas"},
+        # Adding more famous ayahs
+        {"surah": 2, "ayah": 1, "name": "Alif Lam Meem"},
+        {"surah": 2, "ayah": 286, "name": "Last verses of Al-Baqarah"},
+        {"surah": 3, "ayah": 190, "name": "Signs of Allah"},
+        {"surah": 59, "ayah": 22, "name": "Names of Allah"},
+    ]
+    return {"ayahs": ayahs_with_hadith}
+
+# ==================== TRANSLITERATION ====================
+
+@app.get("/api/surah/{surah_number}/transliteration")
+async def get_surah_transliteration(surah_number: int):
+    """Get transliteration for a surah"""
+    if surah_number < 1 or surah_number > 114:
+        raise HTTPException(status_code=404, detail=f"Surah {surah_number} not found")
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{ALQURAN_BASE}/surah/{surah_number}/en.transliteration")
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to fetch transliteration")
+        data = response.json()
+        
+        if data.get("code") != 200:
+            raise HTTPException(status_code=404, detail="Transliteration not found")
+        
+        surah_data = data.get("data", {})
+        ayahs = surah_data.get("ayahs", [])
+        
+        return {
+            "surah": surah_number,
+            "transliteration": [
+                {"number": a.get("numberInSurah"), "text": a.get("text")}
+                for a in ayahs
+            ]
+        }
+
+# ==================== ENHANCED LEARN ARABIC ====================
+
+@app.get("/api/learn/vocabulary")
+async def get_arabic_vocabulary():
+    """Get common Quranic vocabulary with audio"""
+    vocabulary = [
+        {
+            "arabic": "اللّٰه",
+            "transliteration": "Allah",
+            "meaning": "God, The One True God",
+            "usage": "Most frequently used name for God in the Quran",
+            "category": "Names of Allah"
+        },
+        {
+            "arabic": "رَبّ",
+            "transliteration": "Rabb",
+            "meaning": "Lord, Sustainer, Cherisher",
+            "usage": "Refers to Allah as the Lord who nurtures all creation",
+            "category": "Names of Allah"
+        },
+        {
+            "arabic": "رَحْمٰن",
+            "transliteration": "Rahman",
+            "meaning": "The Most Gracious",
+            "usage": "One of the names of Allah, denoting His all-encompassing mercy",
+            "category": "Names of Allah"
+        },
+        {
+            "arabic": "رَحِيم",
+            "transliteration": "Raheem",
+            "meaning": "The Most Merciful",
+            "usage": "One of the names of Allah, denoting His special mercy to believers",
+            "category": "Names of Allah"
+        },
+        {
+            "arabic": "الْحَمْدُ",
+            "transliteration": "Al-Hamd",
+            "meaning": "The Praise, All Praise",
+            "usage": "Used to praise and thank Allah",
+            "category": "Worship"
+        },
+        {
+            "arabic": "صَلَاة",
+            "transliteration": "Salah",
+            "meaning": "Prayer",
+            "usage": "The ritual prayer performed five times daily",
+            "category": "Worship"
+        },
+        {
+            "arabic": "زَكَاة",
+            "transliteration": "Zakah",
+            "meaning": "Charity, Purification",
+            "usage": "Obligatory charity, one of the five pillars of Islam",
+            "category": "Worship"
+        },
+        {
+            "arabic": "صَوْم",
+            "transliteration": "Sawm",
+            "meaning": "Fasting",
+            "usage": "Abstaining from food and drink from dawn to sunset",
+            "category": "Worship"
+        },
+        {
+            "arabic": "جَنَّة",
+            "transliteration": "Jannah",
+            "meaning": "Paradise, Garden",
+            "usage": "The eternal abode of the righteous",
+            "category": "Afterlife"
+        },
+        {
+            "arabic": "نَار",
+            "transliteration": "Naar",
+            "meaning": "Fire, Hellfire",
+            "usage": "The punishment for the wicked",
+            "category": "Afterlife"
+        },
+        {
+            "arabic": "مَلَك",
+            "transliteration": "Malak",
+            "meaning": "Angel",
+            "usage": "Beings created from light who carry out Allah's commands",
+            "category": "Creation"
+        },
+        {
+            "arabic": "رَسُول",
+            "transliteration": "Rasool",
+            "meaning": "Messenger",
+            "usage": "A prophet who received a scripture from Allah",
+            "category": "Prophets"
+        },
+        {
+            "arabic": "نَبِيّ",
+            "transliteration": "Nabi",
+            "meaning": "Prophet",
+            "usage": "One who receives revelation from Allah",
+            "category": "Prophets"
+        },
+        {
+            "arabic": "كِتَاب",
+            "transliteration": "Kitab",
+            "meaning": "Book, Scripture",
+            "usage": "Often refers to the Quran or previous scriptures",
+            "category": "Scripture"
+        },
+        {
+            "arabic": "آيَة",
+            "transliteration": "Ayah",
+            "meaning": "Sign, Verse",
+            "usage": "A verse of the Quran or a sign from Allah",
+            "category": "Scripture"
+        },
+        {
+            "arabic": "سُورَة",
+            "transliteration": "Surah",
+            "meaning": "Chapter",
+            "usage": "A chapter of the Quran",
+            "category": "Scripture"
+        },
+        {
+            "arabic": "تَقْوَى",
+            "transliteration": "Taqwa",
+            "meaning": "God-consciousness, Piety",
+            "usage": "Being aware of Allah and avoiding sin",
+            "category": "Character"
+        },
+        {
+            "arabic": "صَبْر",
+            "transliteration": "Sabr",
+            "meaning": "Patience, Perseverance",
+            "usage": "Steadfastness in face of difficulty",
+            "category": "Character"
+        },
+        {
+            "arabic": "شُكْر",
+            "transliteration": "Shukr",
+            "meaning": "Gratitude, Thanks",
+            "usage": "Being thankful to Allah for His blessings",
+            "category": "Character"
+        },
+        {
+            "arabic": "تَوْبَة",
+            "transliteration": "Tawbah",
+            "meaning": "Repentance",
+            "usage": "Turning back to Allah and seeking forgiveness",
+            "category": "Character"
+        }
+    ]
+    return {"vocabulary": vocabulary}
+
+@app.get("/api/learn/phrases")
+async def get_common_phrases():
+    """Get common Quranic phrases and expressions"""
+    phrases = [
+        {
+            "arabic": "بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ",
+            "transliteration": "Bismillah ir-Rahman ir-Raheem",
+            "meaning": "In the name of Allah, the Most Gracious, the Most Merciful",
+            "usage": "Said before starting any action or recitation",
+            "category": "Common Phrases"
+        },
+        {
+            "arabic": "الْحَمْدُ لِلّٰهِ",
+            "transliteration": "Alhamdulillah",
+            "meaning": "All praise is due to Allah",
+            "usage": "Expression of gratitude",
+            "category": "Common Phrases"
+        },
+        {
+            "arabic": "سُبْحَانَ اللّٰهِ",
+            "transliteration": "Subhanallah",
+            "meaning": "Glory be to Allah",
+            "usage": "Expression of amazement or glorification",
+            "category": "Common Phrases"
+        },
+        {
+            "arabic": "اللّٰهُ أَكْبَرُ",
+            "transliteration": "Allahu Akbar",
+            "meaning": "Allah is the Greatest",
+            "usage": "Proclamation of Allah's greatness",
+            "category": "Common Phrases"
+        },
+        {
+            "arabic": "لَا إِلٰهَ إِلَّا اللّٰهُ",
+            "transliteration": "La ilaha illallah",
+            "meaning": "There is no god but Allah",
+            "usage": "Declaration of faith (Shahada)",
+            "category": "Shahada"
+        },
+        {
+            "arabic": "إِنَّا لِلّٰهِ وَإِنَّا إِلَيْهِ رَاجِعُونَ",
+            "transliteration": "Inna lillahi wa inna ilayhi raji'un",
+            "meaning": "Indeed we belong to Allah, and indeed to Him we will return",
+            "usage": "Said upon hearing news of death or calamity",
+            "category": "Condolence"
+        },
+        {
+            "arabic": "مَا شَاءَ اللّٰهُ",
+            "transliteration": "Masha'Allah",
+            "meaning": "What Allah has willed",
+            "usage": "Said to express appreciation without envy",
+            "category": "Common Phrases"
+        },
+        {
+            "arabic": "إِنْ شَاءَ اللّٰهُ",
+            "transliteration": "Insha'Allah",
+            "meaning": "If Allah wills",
+            "usage": "Said when speaking of future events",
+            "category": "Common Phrases"
+        },
+        {
+            "arabic": "أَسْتَغْفِرُ اللّٰهَ",
+            "transliteration": "Astaghfirullah",
+            "meaning": "I seek forgiveness from Allah",
+            "usage": "Seeking forgiveness for sins",
+            "category": "Repentance"
+        },
+        {
+            "arabic": "جَزَاكَ اللّٰهُ خَيْرًا",
+            "transliteration": "Jazakallahu khairan",
+            "meaning": "May Allah reward you with good",
+            "usage": "Expression of gratitude to someone",
+            "category": "Gratitude"
+        }
+    ]
+    return {"phrases": phrases}
 
 if __name__ == "__main__":
     import uvicorn

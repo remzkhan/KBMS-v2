@@ -140,11 +140,25 @@ class QuranAPITester:
             print("   ℹ️  Should return list of available Quran reciters")
         return success
 
+    def test_get_reciters_v2(self) -> bool:
+        """Test getting everyayah.com reciters (updated endpoint)"""
+        success = self.run_test("Get Reciters v2 (EveryAyah)", "GET", "/api/reciters/v2")
+        if success:
+            print("   ℹ️  Should return everyayah.com compatible reciters")
+        return success
+
     def test_get_ayah_audio(self) -> bool:
         """Test getting audio URL for specific ayah"""
         success = self.run_test("Get Ayah Audio", "GET", "/api/audio/ayah/7/1/1")
         if success:
             print("   ℹ️  Should return audio URL for Al-Fatiha verse 1")
+        return success
+
+    def test_get_ayah_audio_v2(self) -> bool:
+        """Test getting everyayah.com audio URL for specific ayah"""
+        success = self.run_test("Get Ayah Audio v2 (EveryAyah)", "GET", "/api/audio/ayah/v2/1/1")
+        if success:
+            print("   ℹ️  Should return everyayah.com audio URL for Al-Fatiha verse 1")
         return success
 
     def test_get_surah_audio(self) -> bool:
@@ -160,6 +174,13 @@ class QuranAPITester:
         success = self.run_test("Get Related Hadith", "GET", "/api/hadith/related/1/1")
         if success:
             print("   ℹ️  Should return hadith related to Al-Fatiha verse 1")
+        return success
+
+    def test_get_ayahs_with_hadith(self) -> bool:
+        """Test getting list of ayahs that have related hadith"""
+        success = self.run_test("Get Ayahs with Hadith", "GET", "/api/hadith/ayahs-with-hadith")
+        if success:
+            print("   ℹ️  Should return list of surah:ayah pairs that have hadith")
         return success
 
     def test_arabic_learning_alphabet(self) -> bool:
@@ -181,6 +202,27 @@ class QuranAPITester:
         success = self.run_test("Get Arabic Grammar", "GET", "/api/learn/grammar")
         if success:
             print("   ℹ️  Should return Arabic grammar basics")
+        return success
+
+    def test_arabic_learning_vocabulary(self) -> bool:
+        """Test Arabic learning - vocabulary section"""
+        success = self.run_test("Get Arabic Vocabulary", "GET", "/api/learn/vocabulary")
+        if success:
+            print("   ℹ️  Should return common Quranic vocabulary with categories")
+        return success
+
+    def test_arabic_learning_phrases(self) -> bool:
+        """Test Arabic learning - phrases section"""
+        success = self.run_test("Get Arabic Phrases", "GET", "/api/learn/phrases")
+        if success:
+            print("   ℹ️  Should return common Quranic phrases and expressions")
+        return success
+
+    def test_get_surah_transliteration(self) -> bool:
+        """Test getting transliteration for a surah"""
+        success = self.run_test("Get Surah Transliteration", "GET", "/api/surah/1/transliteration")
+        if success:
+            print("   ℹ️  Should return transliteration for Al-Fatiha")
         return success
 
     def test_bookmarks_workflow(self) -> bool:
@@ -254,6 +296,40 @@ class QuranAPITester:
         
         return get_success
 
+    def test_hifz_workflow(self) -> bool:
+        """Test Hifz (memorization) endpoints"""
+        print("\n🔄 Testing Hifz Workflow...")
+        
+        # Get Hifz progress
+        get_progress = self.run_test("Get Hifz Progress", "GET", "/api/hifz/progress")
+        if not get_progress:
+            return False
+
+        # Get Hifz stats
+        get_stats = self.run_test("Get Hifz Stats", "GET", "/api/hifz/stats")
+        if not get_stats:
+            return False
+
+        # Save Hifz progress
+        hifz_data = {
+            "surah_number": 1,
+            "ayah_start": 1,
+            "ayah_end": 7,
+            "status": "learning",
+            "repetitions": 5
+        }
+        save_success = self.run_test("Save Hifz Progress", "POST", "/api/hifz/progress", 200, hifz_data)
+        if not save_success:
+            return False
+
+        # Get stats again to verify data was saved
+        get_stats_after = self.run_test("Get Hifz Stats After Save", "GET", "/api/hifz/stats")
+        
+        # Delete the progress entry (cleanup)
+        delete_success = self.run_test("Delete Hifz Progress", "DELETE", "/api/hifz/progress/1/1/7")
+        
+        return delete_success
+
     def test_edge_cases(self) -> bool:
         """Test edge cases and error handling"""
         print("\n🔄 Testing Edge Cases...")
@@ -282,23 +358,30 @@ class QuranAPITester:
         self.test_get_specific_surah()
         self.test_get_surah_with_params()
         self.test_get_reciters()
+        self.test_get_reciters_v2()
         
         # Audio tests
         self.test_get_ayah_audio()
+        self.test_get_ayah_audio_v2()
         self.test_get_surah_audio()
         
         # Hadith tests
         self.test_get_related_hadith()
+        self.test_get_ayahs_with_hadith()
         
         # Learning module tests
         self.test_arabic_learning_alphabet()
         self.test_arabic_learning_tajweed()
         self.test_arabic_learning_grammar()
+        self.test_arabic_learning_vocabulary()
+        self.test_arabic_learning_phrases()
+        self.test_get_surah_transliteration()
         
         # Workflow tests
         self.test_bookmarks_workflow()
         self.test_settings_workflow()
         self.test_reading_progress_workflow()
+        self.test_hifz_workflow()
         
         # Edge case tests
         self.test_edge_cases()

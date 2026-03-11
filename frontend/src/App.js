@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Book, Play, Pause, SkipBack, SkipForward, Settings, Moon, Sun, 
   Search, Bookmark, BookOpen, ChevronRight, ChevronLeft, X, Volume2,
-  GraduationCap, Languages, Type, User, Clock, Star, Menu, Home,
-  FileText, VolumeX
+  GraduationCap, Languages, Type, Clock, Star, Menu, Home,
+  FileText, VolumeX, RotateCcw, Check, Eye, EyeOff, Brain,
+  RefreshCw, Award, Repeat, BookMarked, Layers
 } from 'lucide-react';
 import './App.css';
 
@@ -14,13 +15,14 @@ const api = {
   getSurahs: () => fetch(`${API_URL}/api/surahs`).then(r => r.json()),
   getSurah: (num, edition, translation) => 
     fetch(`${API_URL}/api/surah/${num}?edition=${edition}&translation=${translation}`).then(r => r.json()),
-  getReciters: () => fetch(`${API_URL}/api/reciters`).then(r => r.json()),
-  getSurahAudio: (reciterId, surahNum) => 
-    fetch(`${API_URL}/api/audio/${reciterId}/${surahNum}`).then(r => r.json()),
-  getAyahAudio: (reciterId, surahNum, ayahNum) => 
-    fetch(`${API_URL}/api/audio/ayah/${reciterId}/${surahNum}/${ayahNum}`).then(r => r.json()),
+  getSurahTransliteration: (num) => 
+    fetch(`${API_URL}/api/surah/${num}/transliteration`).then(r => r.json()),
+  getReciters: () => fetch(`${API_URL}/api/reciters/v2`).then(r => r.json()),
+  getAyahAudio: (surahNum, ayahNum, reciter) => 
+    fetch(`${API_URL}/api/audio/ayah/v2/${surahNum}/${ayahNum}?reciter=${reciter}`).then(r => r.json()),
   getRelatedHadith: (surahNum, ayahNum) => 
     fetch(`${API_URL}/api/hadith/related/${surahNum}/${ayahNum}`).then(r => r.json()),
+  getAyahsWithHadith: () => fetch(`${API_URL}/api/hadith/ayahs-with-hadith`).then(r => r.json()),
   getBookmarks: () => fetch(`${API_URL}/api/bookmarks`).then(r => r.json()),
   addBookmark: (bookmark) => 
     fetch(`${API_URL}/api/bookmarks`, {
@@ -47,6 +49,19 @@ const api = {
   getAlphabet: () => fetch(`${API_URL}/api/learn/alphabet`).then(r => r.json()),
   getTajweed: () => fetch(`${API_URL}/api/learn/tajweed`).then(r => r.json()),
   getGrammar: () => fetch(`${API_URL}/api/learn/grammar`).then(r => r.json()),
+  getVocabulary: () => fetch(`${API_URL}/api/learn/vocabulary`).then(r => r.json()),
+  getPhrases: () => fetch(`${API_URL}/api/learn/phrases`).then(r => r.json()),
+  // Hifz APIs
+  getHifzProgress: () => fetch(`${API_URL}/api/hifz/progress`).then(r => r.json()),
+  saveHifzProgress: (progress) => 
+    fetch(`${API_URL}/api/hifz/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(progress)
+    }).then(r => r.json()),
+  deleteHifzProgress: (surah, start, end) => 
+    fetch(`${API_URL}/api/hifz/progress/${surah}/${start}/${end}`, { method: 'DELETE' }).then(r => r.json()),
+  getHifzStats: () => fetch(`${API_URL}/api/hifz/stats`).then(r => r.json()),
 };
 
 // ==================== CONSTANTS ====================
@@ -54,6 +69,7 @@ const TEXT_EDITIONS = [
   { id: 'quran-uthmani', name: 'Uthmani', description: 'Standard Arabic script' },
   { id: 'quran-simple', name: 'Simple', description: 'Simplified Arabic' },
   { id: 'quran-simple-clean', name: 'Clean', description: 'Clean simplified text' },
+  { id: 'quran-wordbyword', name: 'Indo-Pak', description: 'South Asian style' },
 ];
 
 const TRANSLATIONS = [
@@ -68,11 +84,32 @@ const TRANSLATIONS = [
 ];
 
 const TEXT_SIZES = [
-  { id: 'small', name: 'Small', arabicClass: 'arabic-text-sm', translationClass: 'text-sm' },
-  { id: 'medium', name: 'Medium', arabicClass: 'arabic-text-md', translationClass: 'text-base' },
-  { id: 'large', name: 'Large', arabicClass: 'arabic-text-lg', translationClass: 'text-lg' },
-  { id: 'xlarge', name: 'Extra Large', arabicClass: 'arabic-text-xl', translationClass: 'text-xl' },
+  { id: 'small', name: 'S', arabicClass: 'arabic-text-sm', translationClass: 'text-sm' },
+  { id: 'medium', name: 'M', arabicClass: 'arabic-text-md', translationClass: 'text-base' },
+  { id: 'large', name: 'L', arabicClass: 'arabic-text-lg', translationClass: 'text-lg' },
+  { id: 'xlarge', name: 'XL', arabicClass: 'arabic-text-xl', translationClass: 'text-xl' },
 ];
+
+const RECITERS = [
+  { id: 'Alafasy_128kbps', name: 'Mishary Rashid Alafasy' },
+  { id: 'Abdul_Basit_Murattal_128kbps', name: 'Abdul Basit Abdul Samad' },
+  { id: 'Husary_128kbps', name: 'Mahmoud Khalil Al-Husary' },
+  { id: 'Minshawy_Murattal_128kbps', name: 'Mohamed Siddiq El-Minshawi' },
+  { id: 'Maher_AlMuaiqly_128kbps', name: 'Maher Al Muaiqly' },
+  { id: 'Sudais_128kbps', name: 'Abdul Rahman Al-Sudais' },
+  { id: 'Shuraym_128kbps', name: 'Saud Al-Shuraim' },
+  { id: 'Saad_AlGhamdi_128kbps', name: 'Saad Al-Ghamdi' },
+];
+
+// Tajweed color classes for different rules
+const TAJWEED_COLORS = {
+  ghunnah: '#10B981', // Green - Ghunnah (nasalization)
+  ikhfa: '#3B82F6',   // Blue - Ikhfa (hiding)
+  idgham: '#8B5CF6',  // Purple - Idgham (merging)
+  iqlab: '#F59E0B',   // Amber - Iqlab (conversion)
+  qalqalah: '#EF4444', // Red - Qalqalah (echo)
+  madd: '#EC4899',    // Pink - Madd (elongation)
+};
 
 // ==================== MAIN APP ====================
 function App() {
@@ -81,25 +118,30 @@ function App() {
   const [surahs, setSurahs] = useState([]);
   const [selectedSurah, setSelectedSurah] = useState(null);
   const [surahData, setSurahData] = useState(null);
+  const [transliterationData, setTransliterationData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [reciters, setReciters] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [readingProgress, setReadingProgress] = useState(null);
+  const [ayahsWithHadith, setAyahsWithHadith] = useState([]);
   
   // Settings
   const [settings, setSettings] = useState({
     text_style: 'quran-uthmani',
-    reciter_id: '7',
+    reciter_id: 'Alafasy_128kbps',
     translation: 'en.sahih',
     text_size: 'large',
-    theme: 'dark'
+    theme: 'dark',
+    show_tajweed: true,
+    show_transliteration: false,
+    view_mode: 'scroll'
   });
   
   // Audio
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentAyah, setCurrentAyah] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
+  const [audioError, setAudioError] = useState(false);
   const audioRef = useRef(null);
   
   // Modals
@@ -114,6 +156,12 @@ function App() {
   const [alphabetData, setAlphabetData] = useState([]);
   const [tajweedData, setTajweedData] = useState([]);
   const [grammarData, setGrammarData] = useState(null);
+  const [vocabularyData, setVocabularyData] = useState([]);
+  const [phrasesData, setPhrasesData] = useState([]);
+
+  // Hifz
+  const [hifzProgress, setHifzProgress] = useState([]);
+  const [hifzStats, setHifzStats] = useState(null);
 
   // Initialize
   useEffect(() => {
@@ -130,20 +178,21 @@ function App() {
 
   const loadInitialData = async () => {
     try {
-      const [surahRes, reciterRes, bookmarkRes, settingsRes, progressRes] = await Promise.all([
+      const [surahRes, bookmarkRes, settingsRes, progressRes, hadithAyahsRes] = await Promise.all([
         api.getSurahs(),
-        api.getReciters(),
         api.getBookmarks(),
         api.getSettings(),
-        api.getProgress()
+        api.getProgress(),
+        api.getAyahsWithHadith()
       ]);
       
       setSurahs(surahRes.surahs || []);
-      setReciters(reciterRes.reciters || []);
       setBookmarks(bookmarkRes.bookmarks || []);
+      setAyahsWithHadith(hadithAyahsRes.ayahs || []);
       if (settingsRes.settings) {
-        setSettings(settingsRes.settings);
-        setDarkMode(settingsRes.settings.theme === 'dark');
+        const s = settingsRes.settings;
+        setSettings(prev => ({ ...prev, ...s }));
+        setDarkMode(s.theme === 'dark');
       }
       if (progressRes.progress) {
         setReadingProgress(progressRes.progress);
@@ -155,11 +204,21 @@ function App() {
 
   const loadSurah = async (surahNumber) => {
     setLoading(true);
+    setTransliterationData(null);
     try {
-      const res = await api.getSurah(surahNumber, settings.text_style, settings.translation);
+      const [res, transRes] = await Promise.all([
+        api.getSurah(surahNumber, settings.text_style, settings.translation),
+        api.getSurahTransliteration(surahNumber).catch(() => null)
+      ]);
+      
       setSurahData(res.surah);
+      if (transRes?.transliteration) {
+        setTransliterationData(transRes.transliteration);
+      }
       setSelectedSurah(surahNumber);
       setCurrentView('reader');
+      setCurrentAyah(null);
+      setIsPlaying(false);
       
       // Save progress
       if (res.surah) {
@@ -175,12 +234,13 @@ function App() {
     setLoading(false);
   };
 
-  // Audio functions
+  // Audio functions with better error handling
   const playAyah = useCallback(async (ayahNumber) => {
     if (!selectedSurah) return;
     
+    setAudioError(false);
     try {
-      const res = await api.getAyahAudio(settings.reciter_id, selectedSurah, ayahNumber);
+      const res = await api.getAyahAudio(selectedSurah, ayahNumber, settings.reciter_id);
       if (res.audio?.url) {
         setAudioUrl(res.audio.url);
         setCurrentAyah(ayahNumber);
@@ -188,6 +248,7 @@ function App() {
       }
     } catch (err) {
       console.error('Failed to get audio:', err);
+      setAudioError(true);
     }
   }, [selectedSurah, settings.reciter_id]);
 
@@ -195,11 +256,22 @@ function App() {
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
+        setIsPlaying(false);
       } else {
-        audioRef.current.play();
+        audioRef.current.play().catch(() => setAudioError(true));
+        setIsPlaying(true);
       }
-      setIsPlaying(!isPlaying);
     }
+  };
+
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setCurrentAyah(null);
+    setIsPlaying(false);
+    setAudioUrl(null);
   };
 
   const playNextAyah = useCallback(() => {
@@ -217,7 +289,7 @@ function App() {
   useEffect(() => {
     if (audioRef.current && audioUrl) {
       audioRef.current.src = audioUrl;
-      audioRef.current.play().catch(() => {});
+      audioRef.current.play().catch(() => setAudioError(true));
     }
   }, [audioUrl]);
 
@@ -225,11 +297,14 @@ function App() {
   useEffect(() => {
     const audio = audioRef.current;
     if (audio) {
-      const handleEnded = () => {
-        playNextAyah();
-      };
+      const handleEnded = () => playNextAyah();
+      const handleError = () => setAudioError(true);
       audio.addEventListener('ended', handleEnded);
-      return () => audio.removeEventListener('ended', handleEnded);
+      audio.addEventListener('error', handleError);
+      return () => {
+        audio.removeEventListener('ended', handleEnded);
+        audio.removeEventListener('error', handleError);
+      };
     }
   }, [playNextAyah]);
 
@@ -256,6 +331,11 @@ function App() {
 
   const isBookmarked = (surahNum, ayahNum) => {
     return bookmarks.some(b => b.surah_number === surahNum && b.ayah_number === ayahNum);
+  };
+
+  // Check if ayah has hadith
+  const hasHadith = (surahNum, ayahNum) => {
+    return ayahsWithHadith.some(h => h.surah === surahNum && h.ayah === ayahNum);
   };
 
   // Hadith modal
@@ -299,20 +379,40 @@ function App() {
       } else if (tab === 'grammar' && !grammarData) {
         const res = await api.getGrammar();
         setGrammarData(res.grammar || null);
+      } else if (tab === 'vocabulary' && vocabularyData.length === 0) {
+        const res = await api.getVocabulary();
+        setVocabularyData(res.vocabulary || []);
+      } else if (tab === 'phrases' && phrasesData.length === 0) {
+        const res = await api.getPhrases();
+        setPhrasesData(res.phrases || []);
       }
     } catch (err) {
       console.error('Failed to load learning data:', err);
     }
   };
 
-  // Filter surahs - search by English name, Arabic name, translation, and number
+  // Hifz data
+  const loadHifzData = async () => {
+    try {
+      const [progressRes, statsRes] = await Promise.all([
+        api.getHifzProgress(),
+        api.getHifzStats()
+      ]);
+      setHifzProgress(progressRes.progress || []);
+      setHifzStats(statsRes.stats || null);
+    } catch (err) {
+      console.error('Failed to load Hifz data:', err);
+    }
+  };
+
+  // Filter surahs
   const filteredSurahs = surahs.filter(s => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
     return (
       s.englishName?.toLowerCase().includes(query) ||
       s.englishNameTranslation?.toLowerCase().includes(query) ||
-      s.name?.includes(searchQuery) ||  // Arabic text search (case-sensitive)
+      s.name?.includes(searchQuery) ||
       s.number?.toString() === query
     );
   });
@@ -321,10 +421,21 @@ function App() {
     return TEXT_SIZES.find(s => s.id === settings.text_size) || TEXT_SIZES[2];
   };
 
+  // Play pronunciation for learning
+  const playPronunciation = (text) => {
+    // Use Web Speech API for pronunciation
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ar-SA';
+      utterance.rate = 0.7;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   return (
     <div className={`min-h-screen ${darkMode ? 'dark' : ''}`} style={{ backgroundColor: 'var(--background)' }}>
       {/* Hidden audio element */}
-      <audio ref={audioRef} />
+      <audio ref={audioRef} preload="auto" />
       
       {/* Navigation */}
       <nav className="sticky top-0 z-30 glass border-b" style={{ borderColor: 'var(--border)' }}>
@@ -339,42 +450,19 @@ function App() {
               >
                 <Menu size={20} />
               </button>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 cursor-pointer" onClick={() => setCurrentView('home')}>
                 <Book className="text-primary" size={28} style={{ color: 'var(--primary)' }} />
                 <span className="text-xl font-bold" style={{ color: 'var(--text)' }}>Quran Reader</span>
               </div>
             </div>
             
             {/* Desktop Nav */}
-            <div className="hidden md:flex items-center gap-8">
-              <button 
-                data-testid="nav-home"
-                className={`nav-link ${currentView === 'home' ? 'active' : ''}`}
-                onClick={() => setCurrentView('home')}
-              >
-                Home
-              </button>
-              <button 
-                data-testid="nav-surahs"
-                className={`nav-link ${currentView === 'surahs' ? 'active' : ''}`}
-                onClick={() => setCurrentView('surahs')}
-              >
-                Surahs
-              </button>
-              <button 
-                data-testid="nav-learn"
-                className={`nav-link ${currentView === 'learn' ? 'active' : ''}`}
-                onClick={() => { setCurrentView('learn'); loadLearningData('alphabet'); }}
-              >
-                Learn Arabic
-              </button>
-              <button 
-                data-testid="nav-bookmarks"
-                className={`nav-link ${currentView === 'bookmarks' ? 'active' : ''}`}
-                onClick={() => setCurrentView('bookmarks')}
-              >
-                Bookmarks
-              </button>
+            <div className="hidden md:flex items-center gap-6">
+              <NavButton active={currentView === 'home'} onClick={() => setCurrentView('home')}>Home</NavButton>
+              <NavButton active={currentView === 'surahs'} onClick={() => setCurrentView('surahs')}>Surahs</NavButton>
+              <NavButton active={currentView === 'learn'} onClick={() => { setCurrentView('learn'); loadLearningData('alphabet'); }}>Learn Arabic</NavButton>
+              <NavButton active={currentView === 'hifz'} onClick={() => { setCurrentView('hifz'); loadHifzData(); }}>Hifz</NavButton>
+              <NavButton active={currentView === 'bookmarks'} onClick={() => setCurrentView('bookmarks')}>Bookmarks</NavButton>
             </div>
             
             {/* Actions */}
@@ -400,35 +488,12 @@ function App() {
         {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t py-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}>
-            <div className="container-fluid flex flex-col gap-4">
-              <button 
-                data-testid="mobile-nav-home"
-                className="text-left py-2"
-                onClick={() => { setCurrentView('home'); setMobileMenuOpen(false); }}
-              >
-                <Home size={18} className="inline mr-3" /> Home
-              </button>
-              <button 
-                data-testid="mobile-nav-surahs"
-                className="text-left py-2"
-                onClick={() => { setCurrentView('surahs'); setMobileMenuOpen(false); }}
-              >
-                <Book size={18} className="inline mr-3" /> Surahs
-              </button>
-              <button 
-                data-testid="mobile-nav-learn"
-                className="text-left py-2"
-                onClick={() => { setCurrentView('learn'); loadLearningData('alphabet'); setMobileMenuOpen(false); }}
-              >
-                <GraduationCap size={18} className="inline mr-3" /> Learn Arabic
-              </button>
-              <button 
-                data-testid="mobile-nav-bookmarks"
-                className="text-left py-2"
-                onClick={() => { setCurrentView('bookmarks'); setMobileMenuOpen(false); }}
-              >
-                <Bookmark size={18} className="inline mr-3" /> Bookmarks
-              </button>
+            <div className="container-fluid flex flex-col gap-3">
+              <MobileNavItem icon={<Home size={18} />} onClick={() => { setCurrentView('home'); setMobileMenuOpen(false); }}>Home</MobileNavItem>
+              <MobileNavItem icon={<Book size={18} />} onClick={() => { setCurrentView('surahs'); setMobileMenuOpen(false); }}>Surahs</MobileNavItem>
+              <MobileNavItem icon={<GraduationCap size={18} />} onClick={() => { setCurrentView('learn'); loadLearningData('alphabet'); setMobileMenuOpen(false); }}>Learn Arabic</MobileNavItem>
+              <MobileNavItem icon={<Brain size={18} />} onClick={() => { setCurrentView('hifz'); loadHifzData(); setMobileMenuOpen(false); }}>Hifz</MobileNavItem>
+              <MobileNavItem icon={<Bookmark size={18} />} onClick={() => { setCurrentView('bookmarks'); setMobileMenuOpen(false); }}>Bookmarks</MobileNavItem>
             </div>
           </div>
         )}
@@ -442,6 +507,7 @@ function App() {
             readingProgress={readingProgress}
             onSelectSurah={loadSurah}
             onNavigate={setCurrentView}
+            onLoadHifz={loadHifzData}
           />
         )}
         
@@ -457,6 +523,7 @@ function App() {
         {currentView === 'reader' && (
           <ReaderView 
             surahData={surahData}
+            transliterationData={transliterationData}
             loading={loading}
             settings={settings}
             textSizeClass={getTextSizeClass()}
@@ -465,6 +532,7 @@ function App() {
             onPlayAyah={playAyah}
             onToggleBookmark={toggleBookmark}
             isBookmarked={(num) => isBookmarked(selectedSurah, num)}
+            hasHadith={(num) => hasHadith(selectedSurah, num)}
             onOpenHadith={openHadithModal}
             onBack={() => setCurrentView('surahs')}
             onPrevSurah={() => selectedSurah > 1 && loadSurah(selectedSurah - 1)}
@@ -479,15 +547,26 @@ function App() {
             alphabetData={alphabetData}
             tajweedData={tajweedData}
             grammarData={grammarData}
+            vocabularyData={vocabularyData}
+            phrasesData={phrasesData}
+            onPlayPronunciation={playPronunciation}
+          />
+        )}
+
+        {currentView === 'hifz' && (
+          <HifzView 
+            surahs={surahs}
+            hifzProgress={hifzProgress}
+            hifzStats={hifzStats}
+            onSelectSurah={loadSurah}
+            onRefresh={loadHifzData}
           />
         )}
         
         {currentView === 'bookmarks' && (
           <BookmarksView 
             bookmarks={bookmarks}
-            onSelectBookmark={(b) => {
-              loadSurah(b.surah_number);
-            }}
+            onSelectBookmark={(b) => loadSurah(b.surah_number)}
             onDeleteBookmark={async (b) => {
               await api.deleteBookmark(b.surah_number, b.ayah_number);
               const res = await api.getBookmarks();
@@ -503,17 +582,11 @@ function App() {
           surahData={surahData}
           currentAyah={currentAyah}
           isPlaying={isPlaying}
+          audioError={audioError}
           onTogglePlay={togglePlayPause}
           onPrev={playPrevAyah}
           onNext={playNextAyah}
-          onStop={() => {
-            setCurrentAyah(null);
-            setIsPlaying(false);
-            if (audioRef.current) {
-              audioRef.current.pause();
-              audioRef.current.src = '';
-            }
-          }}
+          onStop={stopAudio}
         />
       )}
 
@@ -521,7 +594,6 @@ function App() {
       {showSettings && (
         <SettingsModal 
           settings={settings}
-          reciters={reciters}
           onUpdateSetting={updateSetting}
           onClose={() => setShowSettings(false)}
         />
@@ -540,13 +612,32 @@ function App() {
   );
 }
 
+// ==================== NAVIGATION COMPONENTS ====================
+function NavButton({ active, onClick, children }) {
+  return (
+    <button 
+      className={`nav-link ${active ? 'active' : ''}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MobileNavItem({ icon, onClick, children }) {
+  return (
+    <button className="text-left py-2 flex items-center gap-3" onClick={onClick} style={{ color: 'var(--text)' }}>
+      {icon} {children}
+    </button>
+  );
+}
+
 // ==================== HOME VIEW ====================
-function HomeView({ surahs, readingProgress, onSelectSurah, onNavigate }) {
-  const featuredSurahs = [1, 36, 55, 67, 112, 114]; // Al-Fatiha, Yasin, Rahman, Mulk, Ikhlas, Nas
+function HomeView({ surahs, readingProgress, onSelectSurah, onNavigate, onLoadHifz }) {
+  const featuredSurahs = [1, 36, 55, 67, 112, 114];
   
   return (
     <div className="container-fluid py-12">
-      {/* Hero Section */}
       <div className="text-center mb-16 animate-fade-in">
         <h1 className="text-4xl md:text-5xl font-bold mb-4" style={{ color: 'var(--text)' }}>
           Read the Holy Quran
@@ -570,46 +661,20 @@ function HomeView({ surahs, readingProgress, onSelectSurah, onNavigate }) {
         )}
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-        <QuickActionCard 
-          icon={<Book />}
-          title="Browse Surahs"
-          description="Explore all 114 chapters of the Holy Quran"
-          onClick={() => onNavigate('surahs')}
-          testId="browse-surahs-card"
-        />
-        <QuickActionCard 
-          icon={<GraduationCap />}
-          title="Learn Arabic"
-          description="Master the alphabet, Tajweed rules, and grammar"
-          onClick={() => onNavigate('learn')}
-          testId="learn-arabic-card"
-        />
-        <QuickActionCard 
-          icon={<Bookmark />}
-          title="Your Bookmarks"
-          description="Access your saved verses and notes"
-          onClick={() => onNavigate('bookmarks')}
-          testId="bookmarks-card"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-16">
+        <QuickActionCard icon={<Book />} title="Browse Surahs" description="Explore all 114 chapters" onClick={() => onNavigate('surahs')} />
+        <QuickActionCard icon={<GraduationCap />} title="Learn Arabic" description="Master alphabet & grammar" onClick={() => onNavigate('learn')} />
+        <QuickActionCard icon={<Brain />} title="Hifz" description="Memorization tools" onClick={() => { onNavigate('hifz'); onLoadHifz(); }} />
+        <QuickActionCard icon={<Bookmark />} title="Bookmarks" description="Your saved verses" onClick={() => onNavigate('bookmarks')} />
       </div>
 
-      {/* Featured Surahs */}
       <div>
         <h2 className="text-2xl font-bold mb-6" style={{ color: 'var(--text)' }}>Featured Surahs</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {featuredSurahs.map((num, idx) => {
             const surah = surahs.find(s => s.number === num);
             if (!surah) return null;
-            return (
-              <SurahCard 
-                key={surah.number}
-                surah={surah}
-                onClick={() => onSelectSurah(surah.number)}
-                delay={idx * 100}
-              />
-            );
+            return <SurahCard key={surah.number} surah={surah} onClick={() => onSelectSurah(surah.number)} delay={idx * 100} />;
           })}
         </div>
       </div>
@@ -617,18 +682,14 @@ function HomeView({ surahs, readingProgress, onSelectSurah, onNavigate }) {
   );
 }
 
-function QuickActionCard({ icon, title, description, onClick, testId }) {
+function QuickActionCard({ icon, title, description, onClick }) {
   return (
-    <button 
-      data-testid={testId}
-      className="learn-card text-left w-full"
-      onClick={onClick}
-    >
+    <button className="learn-card text-left w-full" onClick={onClick}>
       <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: 'rgba(4, 120, 87, 0.1)' }}>
         {React.cloneElement(icon, { size: 24, style: { color: 'var(--primary)' } })}
       </div>
       <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--text)' }}>{title}</h3>
-      <p style={{ color: 'var(--muted)' }}>{description}</p>
+      <p className="text-sm" style={{ color: 'var(--muted)' }}>{description}</p>
     </button>
   );
 }
@@ -637,7 +698,6 @@ function QuickActionCard({ icon, title, description, onClick, testId }) {
 function SurahListView({ surahs, searchQuery, onSearchChange, onSelectSurah }) {
   return (
     <div className="container-fluid py-8">
-      {/* Search */}
       <div className="relative max-w-md mx-auto mb-8">
         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
         <input 
@@ -650,15 +710,9 @@ function SurahListView({ surahs, searchQuery, onSearchChange, onSelectSurah }) {
         />
       </div>
 
-      {/* Surah Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {surahs.map((surah, idx) => (
-          <SurahCard 
-            key={surah.number}
-            surah={surah}
-            onClick={() => onSelectSurah(surah.number)}
-            delay={Math.min(idx * 50, 500)}
-          />
+          <SurahCard key={surah.number} surah={surah} onClick={() => onSelectSurah(surah.number)} delay={Math.min(idx * 30, 300)} />
         ))}
       </div>
 
@@ -680,18 +734,14 @@ function SurahCard({ surah, onClick, delay = 0 }) {
       onClick={onClick}
     >
       <div className="flex items-start gap-4">
-        <div className="surah-number flex-shrink-0">
-          {surah.number}
-        </div>
+        <div className="surah-number flex-shrink-0">{surah.number}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-semibold truncate" style={{ color: 'var(--text)' }}>{surah.englishName}</h3>
             <span className="font-arabic text-xl flex-shrink-0" style={{ color: 'var(--primary)' }} dir="rtl">{surah.name}</span>
           </div>
-          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-            {surah.englishNameTranslation}
-          </p>
-          <div className="flex items-center gap-3 mt-2 text-xs" style={{ color: 'var(--muted)' }}>
+          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{surah.englishNameTranslation}</p>
+          <div className="flex items-center gap-3 mt-2 text-xs">
             <span className="badge badge-primary">{surah.numberOfAyahs} verses</span>
             <span className="badge badge-secondary">{surah.revelationType}</span>
           </div>
@@ -703,42 +753,40 @@ function SurahCard({ surah, onClick, delay = 0 }) {
 
 // ==================== READER VIEW ====================
 function ReaderView({ 
-  surahData, loading, settings, textSizeClass, currentAyah, isPlaying,
-  onPlayAyah, onToggleBookmark, isBookmarked, onOpenHadith, onBack,
+  surahData, transliterationData, loading, settings, textSizeClass, currentAyah, isPlaying,
+  onPlayAyah, onToggleBookmark, isBookmarked, hasHadith, onOpenHadith, onBack,
   onPrevSurah, onNextSurah
 }) {
   const [showTranslation, setShowTranslation] = useState(true);
-  const [showTransliteration, setShowTransliteration] = useState(false);
+  const [showTransliteration, setShowTransliteration] = useState(settings.show_transliteration);
+  const [viewMode, setViewMode] = useState(settings.view_mode || 'scroll');
+  const [currentPage, setCurrentPage] = useState(0);
+  const ayahsPerPage = 10;
   
   if (loading) {
     return (
       <div className="container-fluid py-8">
         <div className="max-w-3xl mx-auto space-y-6">
-          {[1,2,3,4,5].map(i => (
-            <div key={i} className="skeleton h-32 rounded-lg" />
-          ))}
+          {[1,2,3,4,5].map(i => <div key={i} className="skeleton h-32 rounded-lg" />)}
         </div>
       </div>
     );
   }
 
   if (!surahData) {
-    return (
-      <div className="container-fluid py-16 text-center" style={{ color: 'var(--muted)' }}>
-        Select a surah to start reading
-      </div>
-    );
+    return <div className="container-fluid py-16 text-center" style={{ color: 'var(--muted)' }}>Select a surah to start reading</div>;
   }
+
+  const totalPages = Math.ceil((surahData.ayahs?.length || 0) / ayahsPerPage);
+  const displayedAyahs = viewMode === 'book' 
+    ? surahData.ayahs?.slice(currentPage * ayahsPerPage, (currentPage + 1) * ayahsPerPage)
+    : surahData.ayahs;
 
   return (
     <div className="container-fluid py-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
-        <button 
-          data-testid="back-to-surahs"
-          className="icon-btn"
-          onClick={onBack}
-        >
+        <button data-testid="back-to-surahs" className="icon-btn" onClick={onBack}>
           <ChevronLeft size={24} />
         </button>
         
@@ -751,87 +799,95 @@ function ReaderView({
         </div>
         
         <div className="flex items-center gap-2">
-          <button 
-            data-testid="prev-surah-btn"
-            className="icon-btn"
-            onClick={onPrevSurah}
-            disabled={surahData.number <= 1}
-          >
+          <button data-testid="prev-surah-btn" className="icon-btn" onClick={onPrevSurah} disabled={surahData.number <= 1}>
             <ChevronLeft size={20} />
           </button>
-          <button 
-            data-testid="next-surah-btn"
-            className="icon-btn"
-            onClick={onNextSurah}
-            disabled={surahData.number >= 114}
-          >
+          <button data-testid="next-surah-btn" className="icon-btn" onClick={onNextSurah} disabled={surahData.number >= 114}>
             <ChevronRight size={20} />
           </button>
         </div>
       </div>
 
       {/* Display Options */}
-      <div className="flex items-center justify-center gap-4 mb-8">
+      <div className="flex items-center justify-center gap-2 mb-8 flex-wrap">
         <button 
-          data-testid="toggle-translation"
           className={`tab ${showTranslation ? 'tab-active' : 'tab-inactive'}`}
           onClick={() => setShowTranslation(!showTranslation)}
         >
-          <Languages size={16} className="inline mr-2" />
-          Translation
+          <Languages size={16} className="inline mr-2" />Translation
         </button>
         <button 
-          data-testid="toggle-transliteration"
           className={`tab ${showTransliteration ? 'tab-active' : 'tab-inactive'}`}
           onClick={() => setShowTransliteration(!showTransliteration)}
         >
-          <Type size={16} className="inline mr-2" />
-          Transliteration
+          <Type size={16} className="inline mr-2" />Transliteration
+        </button>
+        <button 
+          className={`tab ${viewMode === 'book' ? 'tab-active' : 'tab-inactive'}`}
+          onClick={() => setViewMode(viewMode === 'scroll' ? 'book' : 'scroll')}
+        >
+          <BookOpen size={16} className="inline mr-2" />{viewMode === 'book' ? 'Book View' : 'Scroll View'}
         </button>
       </div>
 
       {/* Bismillah */}
       {surahData.number !== 1 && surahData.number !== 9 && (
-        <div className="bismillah">
-          بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
-        </div>
+        <div className="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
       )}
 
       {/* Ayahs */}
-      <div className="max-w-3xl mx-auto space-y-4">
-        {surahData.ayahs?.map((ayah, idx) => (
-          <AyahCard 
-            key={ayah.number}
-            ayah={ayah}
-            index={idx}
-            textSizeClass={textSizeClass}
-            showTranslation={showTranslation}
-            showTransliteration={showTransliteration}
-            isPlaying={currentAyah === ayah.number && isPlaying}
-            isBookmarked={isBookmarked(ayah.number)}
-            onPlay={() => onPlayAyah(ayah.number)}
-            onToggleBookmark={() => onToggleBookmark(ayah)}
-            onOpenHadith={() => onOpenHadith(ayah)}
-          />
-        ))}
+      <div className={`max-w-3xl mx-auto ${viewMode === 'book' ? 'book-view' : 'space-y-4'}`}>
+        {displayedAyahs?.map((ayah, idx) => {
+          const transliteration = transliterationData?.find(t => t.number === ayah.number);
+          return (
+            <AyahCard 
+              key={ayah.number}
+              ayah={ayah}
+              index={idx}
+              textSizeClass={textSizeClass}
+              showTranslation={showTranslation}
+              showTransliteration={showTransliteration}
+              transliteration={transliteration?.text}
+              showTajweed={settings.show_tajweed}
+              isPlaying={currentAyah === ayah.number && isPlaying}
+              isBookmarked={isBookmarked(ayah.number)}
+              hasHadith={hasHadith(ayah.number)}
+              onPlay={() => onPlayAyah(ayah.number)}
+              onToggleBookmark={() => onToggleBookmark(ayah)}
+              onOpenHadith={() => onOpenHadith(ayah)}
+              viewMode={viewMode}
+            />
+          );
+        })}
       </div>
+
+      {/* Book View Pagination */}
+      {viewMode === 'book' && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4 mt-8">
+          <button 
+            className="btn-secondary"
+            onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+            disabled={currentPage === 0}
+          >
+            <ChevronLeft size={18} className="inline" /> Previous
+          </button>
+          <span style={{ color: 'var(--muted)' }}>Page {currentPage + 1} of {totalPages}</span>
+          <button 
+            className="btn-primary"
+            onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={currentPage >= totalPages - 1}
+          >
+            Next <ChevronRight size={18} className="inline" />
+          </button>
+        </div>
+      )}
 
       {/* Surah Navigation */}
       <div className="flex items-center justify-between max-w-3xl mx-auto mt-12 pt-8 border-t" style={{ borderColor: 'var(--border)' }}>
-        <button 
-          data-testid="prev-surah-bottom"
-          className="btn-secondary"
-          onClick={onPrevSurah}
-          disabled={surahData.number <= 1}
-        >
+        <button className="btn-secondary" onClick={onPrevSurah} disabled={surahData.number <= 1}>
           <ChevronLeft size={18} className="inline mr-1" /> Previous Surah
         </button>
-        <button 
-          data-testid="next-surah-bottom"
-          className="btn-primary"
-          onClick={onNextSurah}
-          disabled={surahData.number >= 114}
-        >
+        <button className="btn-primary" onClick={onNextSurah} disabled={surahData.number >= 114}>
           Next Surah <ChevronRight size={18} className="inline ml-1" />
         </button>
       </div>
@@ -840,26 +896,45 @@ function ReaderView({
 }
 
 function AyahCard({ 
-  ayah, index, textSizeClass, showTranslation, showTransliteration,
-  isPlaying, isBookmarked, onPlay, onToggleBookmark, onOpenHadith
+  ayah, index, textSizeClass, showTranslation, showTransliteration, transliteration,
+  showTajweed, isPlaying, isBookmarked, hasHadith, onPlay, onToggleBookmark, onOpenHadith, viewMode
 }) {
+  // Apply tajweed colors (simplified - in production would use proper tajweed analysis)
+  const getTajweedText = (text) => {
+    if (!showTajweed || !text) return text;
+    
+    // This is a simplified visualization - real tajweed would require proper analysis
+    // Highlighting common tajweed patterns
+    let coloredText = text;
+    
+    // Ghunnah (noon/meem with shaddah) - green
+    coloredText = coloredText.replace(/(نّ|مّ)/g, '<span class="tajweed-ghunnah">$1</span>');
+    
+    // Qalqalah letters at end - red
+    coloredText = coloredText.replace(/(قْ|طْ|بْ|جْ|دْ)(\s|$)/g, '<span class="tajweed-qalqalah">$1</span>$2');
+    
+    return coloredText;
+  };
+
   return (
     <div 
       data-testid={`ayah-card-${ayah.number}`}
-      className={`ayah-container animate-fade-in ${isPlaying ? 'ayah-playing' : ''}`}
+      className={`ayah-container animate-fade-in ${isPlaying ? 'ayah-playing' : ''} ${viewMode === 'book' ? 'book-ayah' : ''}`}
       style={{ animationDelay: `${Math.min(index * 50, 300)}ms` }}
     >
       {/* Arabic Text */}
-      <div className={`arabic-text ${textSizeClass.arabicClass} mb-4`} lang="ar" dir="rtl">
-        {ayah.arabic}
-        <span className="verse-number mx-2">{ayah.number}</span>
-      </div>
+      <div 
+        className={`arabic-text ${textSizeClass.arabicClass} mb-4`} 
+        lang="ar" 
+        dir="rtl"
+        dangerouslySetInnerHTML={{ __html: showTajweed ? getTajweedText(ayah.arabic) : ayah.arabic }}
+      />
+      <span className="verse-number">{ayah.number}</span>
 
-      {/* Transliteration (placeholder - would need actual transliteration data) */}
-      {showTransliteration && (
-        <p className="text-base italic mb-3" style={{ color: 'var(--muted)' }}>
-          {/* Transliteration would be fetched from API with transliteration edition */}
-          [Transliteration not available - select transliteration edition in settings]
+      {/* Transliteration */}
+      {showTransliteration && transliteration && (
+        <p className="text-base italic mb-3" style={{ color: 'var(--secondary)' }}>
+          {transliteration}
         </p>
       )}
 
@@ -876,39 +951,38 @@ function AyahCard({
           data-testid={`play-ayah-${ayah.number}`}
           className="icon-btn icon-btn-primary"
           onClick={onPlay}
-          title={isPlaying ? 'Playing' : 'Play recitation'}
+          title="Play recitation"
         >
           {isPlaying ? <Volume2 size={18} /> : <Play size={18} />}
         </button>
         <button 
           data-testid={`bookmark-ayah-${ayah.number}`}
-          className={`icon-btn ${isBookmarked ? '' : ''}`}
+          className="icon-btn"
           onClick={onToggleBookmark}
           title={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
           style={{ color: isBookmarked ? 'var(--secondary)' : 'var(--muted)' }}
         >
           <Bookmark size={18} fill={isBookmarked ? 'var(--secondary)' : 'none'} />
         </button>
-        <button 
-          data-testid={`hadith-ayah-${ayah.number}`}
-          className="icon-btn"
-          onClick={onOpenHadith}
-          title="Related Hadith"
-        >
-          <FileText size={18} />
-        </button>
-        {ayah.sajda && (
-          <span className="badge badge-secondary ml-2">
-            <Star size={12} className="mr-1" /> Sajda
-          </span>
+        {hasHadith && (
+          <button 
+            data-testid={`hadith-ayah-${ayah.number}`}
+            className="icon-btn"
+            onClick={onOpenHadith}
+            title="Related Hadith"
+            style={{ color: 'var(--secondary)' }}
+          >
+            <FileText size={18} />
+          </button>
         )}
+        {ayah.sajda && <span className="badge badge-secondary ml-2"><Star size={12} className="mr-1" /> Sajda</span>}
       </div>
     </div>
   );
 }
 
 // ==================== LEARN VIEW ====================
-function LearnView({ learnTab, onTabChange, alphabetData, tajweedData, grammarData }) {
+function LearnView({ learnTab, onTabChange, alphabetData, tajweedData, grammarData, vocabularyData, phrasesData, onPlayPronunciation }) {
   return (
     <div className="container-fluid py-8">
       <div className="text-center mb-8">
@@ -916,40 +990,29 @@ function LearnView({ learnTab, onTabChange, alphabetData, tajweedData, grammarDa
         <p style={{ color: 'var(--muted)' }}>Master the language of the Quran</p>
       </div>
 
-      {/* Tabs */}
       <div className="flex items-center justify-center gap-2 mb-8 flex-wrap">
-        <button 
-          data-testid="learn-tab-alphabet"
-          className={`tab ${learnTab === 'alphabet' ? 'tab-active' : 'tab-inactive'}`}
-          onClick={() => onTabChange('alphabet')}
-        >
-          Alphabet
-        </button>
-        <button 
-          data-testid="learn-tab-tajweed"
-          className={`tab ${learnTab === 'tajweed' ? 'tab-active' : 'tab-inactive'}`}
-          onClick={() => onTabChange('tajweed')}
-        >
-          Tajweed Rules
-        </button>
-        <button 
-          data-testid="learn-tab-grammar"
-          className={`tab ${learnTab === 'grammar' ? 'tab-active' : 'tab-inactive'}`}
-          onClick={() => onTabChange('grammar')}
-        >
-          Grammar
-        </button>
+        {['alphabet', 'tajweed', 'grammar', 'vocabulary', 'phrases'].map(tab => (
+          <button 
+            key={tab}
+            data-testid={`learn-tab-${tab}`}
+            className={`tab ${learnTab === tab ? 'tab-active' : 'tab-inactive'}`}
+            onClick={() => onTabChange(tab)}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
       </div>
 
-      {/* Content */}
-      {learnTab === 'alphabet' && <AlphabetSection data={alphabetData} />}
+      {learnTab === 'alphabet' && <AlphabetSection data={alphabetData} onPlay={onPlayPronunciation} />}
       {learnTab === 'tajweed' && <TajweedSection data={tajweedData} />}
-      {learnTab === 'grammar' && <GrammarSection data={grammarData} />}
+      {learnTab === 'grammar' && <GrammarSection data={grammarData} onPlay={onPlayPronunciation} />}
+      {learnTab === 'vocabulary' && <VocabularySection data={vocabularyData} onPlay={onPlayPronunciation} />}
+      {learnTab === 'phrases' && <PhrasesSection data={phrasesData} onPlay={onPlayPronunciation} />}
     </div>
   );
 }
 
-function AlphabetSection({ data }) {
+function AlphabetSection({ data, onPlay }) {
   const [selectedLetter, setSelectedLetter] = useState(null);
 
   return (
@@ -959,9 +1022,8 @@ function AlphabetSection({ data }) {
           <button
             key={idx}
             data-testid={`letter-${letter.name}`}
-            className={`letter-card ${selectedLetter?.name === letter.name ? 'border-primary' : ''}`}
+            className={`letter-card ${selectedLetter?.name === letter.name ? 'ring-2 ring-primary' : ''}`}
             onClick={() => setSelectedLetter(letter)}
-            style={{ borderColor: selectedLetter?.name === letter.name ? 'var(--primary)' : undefined }}
           >
             <span className="letter">{letter.letter}</span>
             <span className="name">{letter.name}</span>
@@ -974,16 +1036,17 @@ function AlphabetSection({ data }) {
           <div className="text-center mb-6">
             <span className="font-arabic text-6xl" style={{ color: 'var(--primary)' }}>{selectedLetter.letter}</span>
             <h3 className="text-2xl font-bold mt-2" style={{ color: 'var(--text)' }}>{selectedLetter.name}</h3>
+            <button 
+              className="icon-btn icon-btn-primary mt-2"
+              onClick={() => onPlay(selectedLetter.letter)}
+              title="Listen to pronunciation"
+            >
+              <Volume2 size={20} />
+            </button>
           </div>
           <div className="space-y-4">
-            <div className="settings-item">
-              <span style={{ color: 'var(--muted)' }}>Transliteration</span>
-              <span className="font-semibold" style={{ color: 'var(--text)' }}>{selectedLetter.transliteration}</span>
-            </div>
-            <div className="settings-item">
-              <span style={{ color: 'var(--muted)' }}>Position</span>
-              <span className="font-semibold" style={{ color: 'var(--text)' }}>{selectedLetter.position}</span>
-            </div>
+            <InfoRow label="Transliteration" value={selectedLetter.transliteration} />
+            <InfoRow label="Position" value={selectedLetter.position} />
             <div className="pt-4">
               <span className="block mb-2" style={{ color: 'var(--muted)' }}>Sound Description</span>
               <p style={{ color: 'var(--text)' }}>{selectedLetter.sound}</p>
@@ -995,11 +1058,33 @@ function AlphabetSection({ data }) {
   );
 }
 
+function InfoRow({ label, value }) {
+  return (
+    <div className="settings-item">
+      <span style={{ color: 'var(--muted)' }}>{label}</span>
+      <span className="font-semibold" style={{ color: 'var(--text)' }}>{value}</span>
+    </div>
+  );
+}
+
 function TajweedSection({ data }) {
-  const [expandedCategory, setExpandedCategory] = useState(null);
+  const [expandedCategory, setExpandedCategory] = useState(0);
 
   return (
     <div className="max-w-3xl mx-auto">
+      {/* Tajweed Color Legend */}
+      <div className="card p-4 mb-6">
+        <h3 className="font-semibold mb-3" style={{ color: 'var(--text)' }}>Tajweed Color Legend</h3>
+        <div className="flex flex-wrap gap-4">
+          <ColorLegend color="#10B981" label="Ghunnah (Nasalization)" />
+          <ColorLegend color="#3B82F6" label="Ikhfa (Hiding)" />
+          <ColorLegend color="#8B5CF6" label="Idgham (Merging)" />
+          <ColorLegend color="#F59E0B" label="Iqlab (Conversion)" />
+          <ColorLegend color="#EF4444" label="Qalqalah (Echo)" />
+          <ColorLegend color="#EC4899" label="Madd (Elongation)" />
+        </div>
+      </div>
+
       {data.map((category, idx) => (
         <div key={idx} className="mb-6">
           <button
@@ -1009,14 +1094,7 @@ function TajweedSection({ data }) {
             onClick={() => setExpandedCategory(expandedCategory === idx ? null : idx)}
           >
             <h3 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>{category.category}</h3>
-            <ChevronRight 
-              size={20} 
-              style={{ 
-                color: 'var(--muted)',
-                transform: expandedCategory === idx ? 'rotate(90deg)' : 'none',
-                transition: 'transform 0.2s'
-              }} 
-            />
+            <ChevronRight size={20} style={{ color: 'var(--muted)', transform: expandedCategory === idx ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
           </button>
           
           {expandedCategory === idx && (
@@ -1028,22 +1106,16 @@ function TajweedSection({ data }) {
                     <span className="text-sm" style={{ color: 'var(--muted)' }}>({rule.meaning})</span>
                   </div>
                   <p className="mb-3" style={{ color: 'var(--text)' }}>{rule.description}</p>
-                  {rule.example && (
-                    <div className="rule-arabic">{rule.example}</div>
-                  )}
+                  {rule.example && <div className="rule-arabic font-arabic text-xl" dir="rtl">{rule.example}</div>}
                   {rule.letters && (
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <span className="text-sm" style={{ color: 'var(--muted)' }}>Letters:</span>
                       {rule.letters.map((l, i) => (
-                        <span key={i} className="font-arabic text-lg" style={{ color: 'var(--primary)' }}>{l}</span>
+                        <span key={i} className="font-arabic text-lg px-2 py-1 rounded" style={{ backgroundColor: 'var(--background)', color: 'var(--primary)' }}>{l}</span>
                       ))}
                     </div>
                   )}
-                  {rule.duration && (
-                    <div className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>
-                      Duration: <span className="font-semibold">{rule.duration}</span>
-                    </div>
-                  )}
+                  {rule.duration && <div className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>Duration: <span className="font-semibold">{rule.duration}</span></div>}
                 </div>
               ))}
             </div>
@@ -1054,12 +1126,19 @@ function TajweedSection({ data }) {
   );
 }
 
-function GrammarSection({ data }) {
+function ColorLegend({ color, label }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-4 h-4 rounded" style={{ backgroundColor: color }} />
+      <span className="text-sm" style={{ color: 'var(--muted)' }}>{label}</span>
+    </div>
+  );
+}
+
+function GrammarSection({ data, onPlay }) {
   const [activeSection, setActiveSection] = useState('parts_of_speech');
 
-  if (!data) {
-    return <div className="text-center py-8" style={{ color: 'var(--muted)' }}>Loading grammar data...</div>;
-  }
+  if (!data) return <div className="text-center py-8" style={{ color: 'var(--muted)' }}>Loading...</div>;
 
   const sections = [
     { id: 'parts_of_speech', label: 'Parts of Speech' },
@@ -1070,12 +1149,10 @@ function GrammarSection({ data }) {
 
   return (
     <div className="max-w-4xl mx-auto">
-      {/* Section Tabs */}
       <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2">
         {sections.map(s => (
           <button
             key={s.id}
-            data-testid={`grammar-section-${s.id}`}
             className={`tab whitespace-nowrap ${activeSection === s.id ? 'tab-active' : 'tab-inactive'}`}
             onClick={() => setActiveSection(s.id)}
           >
@@ -1084,35 +1161,27 @@ function GrammarSection({ data }) {
         ))}
       </div>
 
-      {/* Parts of Speech */}
       {activeSection === 'parts_of_speech' && (
         <div className="space-y-6">
           {data.parts_of_speech?.map((part, idx) => (
             <div key={idx} className="card p-6">
-              <div className="flex items-center gap-4 mb-4">
-                <span className="font-arabic text-3xl" style={{ color: 'var(--primary)' }}>{part.name.split(' ')[0]}</span>
-                <div>
-                  <h3 className="text-xl font-bold" style={{ color: 'var(--text)' }}>{part.english}</h3>
-                  <span className="text-sm" style={{ color: 'var(--muted)' }}>{part.name}</span>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <span className="font-arabic text-3xl" style={{ color: 'var(--primary)' }}>{part.name.split(' ')[0]}</span>
+                  <div>
+                    <h3 className="text-xl font-bold" style={{ color: 'var(--text)' }}>{part.english}</h3>
+                    <span className="text-sm" style={{ color: 'var(--muted)' }}>{part.name}</span>
+                  </div>
                 </div>
+                <button className="icon-btn" onClick={() => onPlay(part.name.split(' ')[0])} title="Listen">
+                  <Volume2 size={18} />
+                </button>
               </div>
               <p className="mb-4" style={{ color: 'var(--text)' }}>{part.description}</p>
               {part.examples && (
                 <div className="flex flex-wrap gap-2">
                   {part.examples.map((ex, i) => (
-                    <span key={i} className="badge badge-primary font-arabic">{ex}</span>
-                  ))}
-                </div>
-              )}
-              {part.types && (
-                <div className="mt-4 space-y-2">
-                  {part.types.map((t, i) => (
-                    <div key={i} className="flex items-center gap-3 p-2 rounded" style={{ backgroundColor: 'var(--background)' }}>
-                      <span className="font-semibold" style={{ color: 'var(--primary)' }}>{t.name}</span>
-                      <span style={{ color: 'var(--muted)' }}>-</span>
-                      <span style={{ color: 'var(--text)' }}>{t.meaning}</span>
-                      <span className="font-arabic" style={{ color: 'var(--secondary)' }}>{t.example}</span>
-                    </div>
+                    <span key={i} className="badge badge-primary font-arabic text-lg px-3 py-1">{ex}</span>
                   ))}
                 </div>
               )}
@@ -1121,7 +1190,6 @@ function GrammarSection({ data }) {
         </div>
       )}
 
-      {/* Case Endings */}
       {activeSection === 'case_endings' && (
         <div className="grid md:grid-cols-3 gap-6">
           {data.case_endings?.map((ending, idx) => (
@@ -1132,13 +1200,12 @@ function GrammarSection({ data }) {
               <h3 className="text-lg font-bold mb-1" style={{ color: 'var(--text)' }}>{ending.english}</h3>
               <p className="text-sm mb-3" style={{ color: 'var(--muted)' }}>{ending.name}</p>
               <p className="text-sm mb-3" style={{ color: 'var(--text)' }}>{ending.usage}</p>
-              <div className="font-arabic text-lg" style={{ color: 'var(--secondary)' }} dir="rtl">{ending.example}</div>
+              <div className="font-arabic text-lg p-2 rounded" style={{ backgroundColor: 'var(--background)', color: 'var(--secondary)' }} dir="rtl">{ending.example}</div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Sentence Types */}
       {activeSection === 'sentence_types' && (
         <div className="grid md:grid-cols-2 gap-6">
           {data.sentence_types?.map((type, idx) => (
@@ -1155,14 +1222,11 @@ function GrammarSection({ data }) {
         </div>
       )}
 
-      {/* Common Patterns */}
       {activeSection === 'common_patterns' && (
         <div className="grid md:grid-cols-3 gap-6">
           {data.common_patterns?.map((pattern, idx) => (
             <div key={idx} className="card p-6">
-              <div className="font-arabic text-3xl text-center mb-4" style={{ color: 'var(--primary)' }} dir="rtl">
-                {pattern.pattern}
-              </div>
+              <div className="font-arabic text-3xl text-center mb-4" style={{ color: 'var(--primary)' }} dir="rtl">{pattern.pattern}</div>
               <p className="text-center font-semibold mb-4" style={{ color: 'var(--text)' }}>{pattern.meaning}</p>
               <div className="space-y-2">
                 {pattern.examples?.map((ex, i) => (
@@ -1179,6 +1243,363 @@ function GrammarSection({ data }) {
   );
 }
 
+function VocabularySection({ data, onPlay }) {
+  const categories = [...new Set(data.map(v => v.category))];
+  const [selectedCategory, setSelectedCategory] = useState(categories[0] || '');
+
+  const filteredVocab = selectedCategory ? data.filter(v => v.category === selectedCategory) : data;
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+        {categories.map(cat => (
+          <button
+            key={cat}
+            className={`tab whitespace-nowrap ${selectedCategory === cat ? 'tab-active' : 'tab-inactive'}`}
+            onClick={() => setSelectedCategory(cat)}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        {filteredVocab.map((word, idx) => (
+          <div key={idx} className="card p-4 flex items-start gap-4">
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <span className="font-arabic text-2xl" style={{ color: 'var(--primary)' }}>{word.arabic}</span>
+                <button className="icon-btn" onClick={() => onPlay(word.arabic)} title="Listen">
+                  <Volume2 size={16} />
+                </button>
+              </div>
+              <p className="text-sm italic" style={{ color: 'var(--muted)' }}>{word.transliteration}</p>
+              <p className="font-semibold mt-1" style={{ color: 'var(--text)' }}>{word.meaning}</p>
+              <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{word.usage}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PhrasesSection({ data, onPlay }) {
+  return (
+    <div className="max-w-3xl mx-auto space-y-4">
+      {data.map((phrase, idx) => (
+        <div key={idx} className="card p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <p className="font-arabic text-2xl mb-2" style={{ color: 'var(--primary)' }} dir="rtl">{phrase.arabic}</p>
+              <p className="text-lg italic mb-1" style={{ color: 'var(--secondary)' }}>{phrase.transliteration}</p>
+              <p className="font-semibold" style={{ color: 'var(--text)' }}>{phrase.meaning}</p>
+              <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>{phrase.usage}</p>
+              <span className="badge badge-primary mt-2">{phrase.category}</span>
+            </div>
+            <button className="icon-btn icon-btn-primary flex-shrink-0" onClick={() => onPlay(phrase.arabic)} title="Listen">
+              <Volume2 size={20} />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ==================== HIFZ VIEW ====================
+function HifzView({ surahs, hifzProgress, hifzStats, onSelectSurah, onRefresh }) {
+  const [selectedSurah, setSelectedSurah] = useState(null);
+  const [ayahStart, setAyahStart] = useState(1);
+  const [ayahEnd, setAyahEnd] = useState(5);
+  const [practiceMode, setPracticeMode] = useState(false);
+  const [currentPracticeAyah, setCurrentPracticeAyah] = useState(0);
+  const [showText, setShowText] = useState(true);
+  const [repetitions, setRepetitions] = useState(0);
+
+  const surahInfo = surahs.find(s => s.number === selectedSurah);
+
+  const startPractice = async () => {
+    if (!selectedSurah) return;
+    
+    // Save progress
+    await api.saveHifzProgress({
+      surah_number: selectedSurah,
+      ayah_start: ayahStart,
+      ayah_end: ayahEnd,
+      status: 'learning',
+      repetitions: 0
+    });
+    
+    setPracticeMode(true);
+    setCurrentPracticeAyah(ayahStart);
+    setRepetitions(0);
+    onRefresh();
+  };
+
+  const completeRepetition = async () => {
+    const newReps = repetitions + 1;
+    setRepetitions(newReps);
+    
+    // After 10 repetitions, mark as memorized
+    const status = newReps >= 10 ? 'memorized' : newReps >= 5 ? 'reviewing' : 'learning';
+    
+    await api.saveHifzProgress({
+      surah_number: selectedSurah,
+      ayah_start: ayahStart,
+      ayah_end: ayahEnd,
+      status,
+      repetitions: newReps
+    });
+    onRefresh();
+  };
+
+  return (
+    <div className="container-fluid py-8">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--text)' }}>
+          <Brain className="inline mr-2" size={32} /> Hifz - Memorization
+        </h1>
+        <p style={{ color: 'var(--muted)' }}>Memorize the Quran using proven rote learning techniques</p>
+      </div>
+
+      {/* Stats */}
+      {hifzStats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 max-w-4xl mx-auto">
+          <StatCard icon={<Check />} label="Memorized" value={`${hifzStats.total_ayahs_memorized} ayahs`} color="var(--primary)" />
+          <StatCard icon={<RefreshCw />} label="Reviewing" value={`${hifzStats.total_ayahs_reviewing} ayahs`} color="var(--secondary)" />
+          <StatCard icon={<BookMarked />} label="Learning" value={`${hifzStats.total_ayahs_learning} ayahs`} color="var(--muted)" />
+          <StatCard icon={<Layers />} label="Surahs" value={`${hifzStats.surahs_in_progress} active`} color="#8B5CF6" />
+        </div>
+      )}
+
+      {!practiceMode ? (
+        <>
+          {/* Surah Selection */}
+          <div className="max-w-2xl mx-auto card p-6 mb-8">
+            <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>Start New Memorization Session</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block mb-2 text-sm" style={{ color: 'var(--muted)' }}>Select Surah</label>
+                <select 
+                  className="select-dropdown w-full"
+                  value={selectedSurah || ''}
+                  onChange={(e) => {
+                    const num = parseInt(e.target.value);
+                    setSelectedSurah(num);
+                    setAyahStart(1);
+                    const s = surahs.find(s => s.number === num);
+                    setAyahEnd(Math.min(5, s?.numberOfAyahs || 5));
+                  }}
+                >
+                  <option value="">Choose a Surah...</option>
+                  {surahs.map(s => (
+                    <option key={s.number} value={s.number}>{s.number}. {s.englishName} ({s.numberOfAyahs} ayahs)</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedSurah && surahInfo && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block mb-2 text-sm" style={{ color: 'var(--muted)' }}>Start Ayah</label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        max={surahInfo.numberOfAyahs}
+                        value={ayahStart}
+                        onChange={(e) => setAyahStart(parseInt(e.target.value))}
+                        className="search-input text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-2 text-sm" style={{ color: 'var(--muted)' }}>End Ayah</label>
+                      <input 
+                        type="number" 
+                        min={ayahStart} 
+                        max={surahInfo.numberOfAyahs}
+                        value={ayahEnd}
+                        onChange={(e) => setAyahEnd(parseInt(e.target.value))}
+                        className="search-input text-center"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--background)' }}>
+                    <p style={{ color: 'var(--muted)' }}>
+                      You will memorize <strong style={{ color: 'var(--primary)' }}>{ayahEnd - ayahStart + 1} ayahs</strong> from {surahInfo.englishName}
+                    </p>
+                  </div>
+
+                  <button className="btn-primary w-full" onClick={startPractice}>
+                    <Brain className="inline mr-2" size={18} /> Start Memorization
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Progress List */}
+          {hifzProgress.length > 0 && (
+            <div className="max-w-2xl mx-auto">
+              <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>Your Progress</h3>
+              <div className="space-y-3">
+                {hifzProgress.map((p, idx) => {
+                  const s = surahs.find(s => s.number === p.surah_number);
+                  return (
+                    <div key={idx} className="card p-4 flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold" style={{ color: 'var(--text)' }}>{s?.englishName || `Surah ${p.surah_number}`}</p>
+                        <p className="text-sm" style={{ color: 'var(--muted)' }}>Ayahs {p.ayah_start}-{p.ayah_end} • {p.repetitions} reps</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`badge ${p.status === 'memorized' ? 'badge-primary' : p.status === 'reviewing' ? 'badge-secondary' : ''}`}>
+                          {p.status}
+                        </span>
+                        <button 
+                          className="btn-primary text-sm py-2 px-3"
+                          onClick={() => {
+                            setSelectedSurah(p.surah_number);
+                            setAyahStart(p.ayah_start);
+                            setAyahEnd(p.ayah_end);
+                            setRepetitions(p.repetitions);
+                            setPracticeMode(true);
+                            setCurrentPracticeAyah(p.ayah_start);
+                          }}
+                        >
+                          Continue
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Memorization Tips */}
+          <div className="max-w-2xl mx-auto mt-8">
+            <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>Memorization Tips</h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <TipCard title="Start Small" description="Begin with 3-5 ayahs per session. Quality over quantity." />
+              <TipCard title="Repeat 10-20 Times" description="Recite each ayah 10-20 times until it flows naturally." />
+              <TipCard title="Listen First" description="Listen to a reciter before attempting to memorize." />
+              <TipCard title="Review Daily" description="Review previously memorized portions every day." />
+              <TipCard title="Connect Ayahs" description="Once you know 2 ayahs, practice them together." />
+              <TipCard title="Morning is Best" description="The mind is freshest after Fajr prayer." />
+            </div>
+          </div>
+        </>
+      ) : (
+        /* Practice Mode */
+        <div className="max-w-3xl mx-auto">
+          <div className="card p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
+                {surahInfo?.englishName} • Ayahs {ayahStart}-{ayahEnd}
+              </h3>
+              <button className="icon-btn" onClick={() => setPracticeMode(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <span className="badge badge-primary">Repetitions: {repetitions}</span>
+              <button 
+                className={`tab ${showText ? 'tab-active' : 'tab-inactive'}`}
+                onClick={() => setShowText(!showText)}
+              >
+                {showText ? <Eye size={16} className="inline mr-2" /> : <EyeOff size={16} className="inline mr-2" />}
+                {showText ? 'Hide Text' : 'Show Text'}
+              </button>
+            </div>
+
+            {/* Current Ayah Display */}
+            <div className="text-center py-8 px-4 rounded-lg mb-6" style={{ backgroundColor: 'var(--background)' }}>
+              <p className="text-sm mb-2" style={{ color: 'var(--muted)' }}>Ayah {currentPracticeAyah}</p>
+              {showText ? (
+                <p className="font-arabic text-3xl leading-loose" style={{ color: 'var(--primary)' }} dir="rtl">
+                  [Load ayah text here - Click Play to hear]
+                </p>
+              ) : (
+                <p className="text-xl" style={{ color: 'var(--muted)' }}>Text hidden - try to recite from memory</p>
+              )}
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center justify-center gap-4">
+              <button 
+                className="icon-btn"
+                disabled={currentPracticeAyah <= ayahStart}
+                onClick={() => setCurrentPracticeAyah(p => p - 1)}
+              >
+                <SkipBack size={20} />
+              </button>
+              
+              <button className="icon-btn icon-btn-primary w-14 h-14">
+                <Play size={24} />
+              </button>
+              
+              <button 
+                className="icon-btn"
+                disabled={currentPracticeAyah >= ayahEnd}
+                onClick={() => setCurrentPracticeAyah(p => p + 1)}
+              >
+                <SkipForward size={20} />
+              </button>
+            </div>
+
+            {/* Progress */}
+            <div className="mt-6">
+              <div className="progress-bar">
+                <div 
+                  className="progress-fill" 
+                  style={{ width: `${((currentPracticeAyah - ayahStart + 1) / (ayahEnd - ayahStart + 1)) * 100}%` }}
+                />
+              </div>
+              <p className="text-center text-sm mt-2" style={{ color: 'var(--muted)' }}>
+                Ayah {currentPracticeAyah - ayahStart + 1} of {ayahEnd - ayahStart + 1}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-center gap-4">
+            <button className="btn-secondary" onClick={() => setRepetitions(0)}>
+              <RotateCcw size={18} className="inline mr-2" /> Reset Reps
+            </button>
+            <button className="btn-primary" onClick={completeRepetition}>
+              <Check size={18} className="inline mr-2" /> Complete Round ({repetitions + 1})
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value, color }) {
+  return (
+    <div className="card p-4 text-center">
+      <div className="w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
+        {React.cloneElement(icon, { size: 20, style: { color } })}
+      </div>
+      <p className="text-sm" style={{ color: 'var(--muted)' }}>{label}</p>
+      <p className="font-semibold" style={{ color: 'var(--text)' }}>{value}</p>
+    </div>
+  );
+}
+
+function TipCard({ title, description }) {
+  return (
+    <div className="card p-4">
+      <h4 className="font-semibold mb-1" style={{ color: 'var(--primary)' }}>{title}</h4>
+      <p className="text-sm" style={{ color: 'var(--muted)' }}>{description}</p>
+    </div>
+  );
+}
+
 // ==================== BOOKMARKS VIEW ====================
 function BookmarksView({ bookmarks, onSelectBookmark, onDeleteBookmark }) {
   if (bookmarks.length === 0) {
@@ -1186,7 +1607,7 @@ function BookmarksView({ bookmarks, onSelectBookmark, onDeleteBookmark }) {
       <div className="container-fluid py-16 text-center">
         <Bookmark size={48} className="mx-auto mb-4" style={{ color: 'var(--muted)' }} />
         <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--text)' }}>No Bookmarks Yet</h2>
-        <p style={{ color: 'var(--muted)' }}>Save your favorite verses while reading to access them here</p>
+        <p style={{ color: 'var(--muted)' }}>Save your favorite verses while reading</p>
       </div>
     );
   }
@@ -1196,39 +1617,15 @@ function BookmarksView({ bookmarks, onSelectBookmark, onDeleteBookmark }) {
       <h1 className="text-2xl font-bold mb-6" style={{ color: 'var(--text)' }}>Your Bookmarks</h1>
       <div className="max-w-3xl mx-auto space-y-4">
         {bookmarks.map((bookmark, idx) => (
-          <div 
-            key={idx}
-            data-testid={`bookmark-${bookmark.surah_number}-${bookmark.ayah_number}`}
-            className="card p-4 flex items-start gap-4"
-          >
-            <div className="surah-number flex-shrink-0">
-              {bookmark.surah_number}:{bookmark.ayah_number}
-            </div>
+          <div key={idx} className="card p-4 flex items-start gap-4">
+            <div className="surah-number flex-shrink-0">{bookmark.surah_number}:{bookmark.ayah_number}</div>
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold" style={{ color: 'var(--text)' }}>{bookmark.surah_name}</h3>
-              <p className="font-arabic text-lg mt-1 truncate" style={{ color: 'var(--muted)' }} dir="rtl">
-                {bookmark.ayah_text}...
-              </p>
-              {bookmark.note && (
-                <p className="text-sm mt-2 italic" style={{ color: 'var(--muted)' }}>{bookmark.note}</p>
-              )}
+              <p className="font-arabic text-lg mt-1 truncate" style={{ color: 'var(--muted)' }} dir="rtl">{bookmark.ayah_text}...</p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <button 
-                data-testid={`goto-bookmark-${idx}`}
-                className="btn-primary text-sm py-2 px-4"
-                onClick={() => onSelectBookmark(bookmark)}
-              >
-                Read
-              </button>
-              <button 
-                data-testid={`delete-bookmark-${idx}`}
-                className="icon-btn"
-                onClick={() => onDeleteBookmark(bookmark)}
-                style={{ color: 'var(--muted)' }}
-              >
-                <X size={18} />
-              </button>
+              <button className="btn-primary text-sm py-2 px-4" onClick={() => onSelectBookmark(bookmark)}>Read</button>
+              <button className="icon-btn" onClick={() => onDeleteBookmark(bookmark)} style={{ color: 'var(--muted)' }}><X size={18} /></button>
             </div>
           </div>
         ))}
@@ -1238,48 +1635,28 @@ function BookmarksView({ bookmarks, onSelectBookmark, onDeleteBookmark }) {
 }
 
 // ==================== AUDIO PLAYER BAR ====================
-function AudioPlayerBar({ surahData, currentAyah, isPlaying, onTogglePlay, onPrev, onNext, onStop }) {
+function AudioPlayerBar({ surahData, currentAyah, isPlaying, audioError, onTogglePlay, onPrev, onNext, onStop }) {
   return (
     <div className="audio-bar" data-testid="audio-player-bar">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="text-sm">
-            <span style={{ color: 'var(--muted)' }}>Now Playing</span>
-            <p className="font-semibold" style={{ color: 'var(--text)' }}>
-              {surahData?.englishName} - Ayah {currentAyah}
-            </p>
+            <span style={{ color: 'var(--muted)' }}>{audioError ? 'Audio Error' : 'Now Playing'}</span>
+            <p className="font-semibold" style={{ color: 'var(--text)' }}>{surahData?.englishName} - Ayah {currentAyah}</p>
           </div>
         </div>
         
         <div className="flex items-center gap-2">
-          <button 
-            data-testid="audio-prev"
-            className="icon-btn"
-            onClick={onPrev}
-            disabled={currentAyah <= 1}
-          >
+          <button data-testid="audio-prev" className="icon-btn" onClick={onPrev} disabled={currentAyah <= 1}>
             <SkipBack size={20} />
           </button>
-          <button 
-            data-testid="audio-play-pause"
-            className="icon-btn icon-btn-primary w-12 h-12"
-            onClick={onTogglePlay}
-          >
+          <button data-testid="audio-play-pause" className={`icon-btn ${audioError ? '' : 'icon-btn-primary'} w-12 h-12`} onClick={onTogglePlay}>
             {isPlaying ? <Pause size={24} /> : <Play size={24} />}
           </button>
-          <button 
-            data-testid="audio-next"
-            className="icon-btn"
-            onClick={onNext}
-            disabled={currentAyah >= surahData?.numberOfAyahs}
-          >
+          <button data-testid="audio-next" className="icon-btn" onClick={onNext} disabled={currentAyah >= surahData?.numberOfAyahs}>
             <SkipForward size={20} />
           </button>
-          <button 
-            data-testid="audio-stop"
-            className="icon-btn ml-4"
-            onClick={onStop}
-          >
+          <button data-testid="audio-stop" className="icon-btn ml-4" onClick={onStop}>
             <VolumeX size={20} />
           </button>
         </div>
@@ -1293,50 +1670,35 @@ function AudioPlayerBar({ surahData, currentAyah, isPlaying, onTogglePlay, onPre
 }
 
 // ==================== SETTINGS MODAL ====================
-function SettingsModal({ settings, reciters, onUpdateSetting, onClose }) {
+function SettingsModal({ settings, onUpdateSetting, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div 
-        className="card p-6 w-full max-w-md m-4 max-h-[80vh] overflow-y-auto animate-fade-in"
+        className="card p-6 w-full max-w-md m-4 max-h-[85vh] overflow-y-auto animate-fade-in"
         onClick={e => e.stopPropagation()}
         data-testid="settings-modal"
       >
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Settings</h2>
-          <button data-testid="close-settings" className="icon-btn" onClick={onClose}>
-            <X size={20} />
-          </button>
+          <button data-testid="close-settings" className="icon-btn" onClick={onClose}><X size={20} /></button>
         </div>
 
         <div className="space-y-6">
           {/* Theme */}
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: 'var(--text)' }}>Theme</label>
+          <SettingSection title="Theme">
             <div className="flex gap-2">
-              <button 
-                data-testid="theme-light"
-                className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 ${settings.theme === 'light' ? 'border-primary' : ''}`}
-                style={{ borderColor: settings.theme === 'light' ? 'var(--primary)' : 'var(--border)', backgroundColor: 'var(--surface)' }}
-                onClick={() => onUpdateSetting('theme', 'light')}
-              >
+              <SettingButton active={settings.theme === 'light'} onClick={() => onUpdateSetting('theme', 'light')}>
                 <Sun size={18} /> Light
-              </button>
-              <button 
-                data-testid="theme-dark"
-                className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 ${settings.theme === 'dark' ? 'border-primary' : ''}`}
-                style={{ borderColor: settings.theme === 'dark' ? 'var(--primary)' : 'var(--border)', backgroundColor: 'var(--surface)' }}
-                onClick={() => onUpdateSetting('theme', 'dark')}
-              >
+              </SettingButton>
+              <SettingButton active={settings.theme === 'dark'} onClick={() => onUpdateSetting('theme', 'dark')}>
                 <Moon size={18} /> Dark
-              </button>
+              </SettingButton>
             </div>
-          </div>
+          </SettingSection>
 
           {/* Text Style */}
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: 'var(--text)' }}>Arabic Text Style</label>
+          <SettingSection title="Arabic Text Style">
             <select 
-              data-testid="text-style-select"
               className="select-dropdown w-full"
               value={settings.text_style}
               onChange={e => onUpdateSetting('text_style', e.target.value)}
@@ -1345,13 +1707,11 @@ function SettingsModal({ settings, reciters, onUpdateSetting, onClose }) {
                 <option key={e.id} value={e.id}>{e.name} - {e.description}</option>
               ))}
             </select>
-          </div>
+          </SettingSection>
 
           {/* Translation */}
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: 'var(--text)' }}>Translation</label>
+          <SettingSection title="Translation">
             <select 
-              data-testid="translation-select"
               className="select-dropdown w-full"
               value={settings.translation}
               onChange={e => onUpdateSetting('translation', e.target.value)}
@@ -1360,43 +1720,83 @@ function SettingsModal({ settings, reciters, onUpdateSetting, onClose }) {
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
-          </div>
+          </SettingSection>
 
           {/* Text Size */}
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: 'var(--text)' }}>Text Size</label>
+          <SettingSection title="Text Size">
             <div className="flex gap-2">
               {TEXT_SIZES.map(s => (
-                <button 
-                  key={s.id}
-                  data-testid={`text-size-${s.id}`}
-                  className={`flex-1 p-2 rounded-lg border text-sm ${settings.text_size === s.id ? 'border-primary' : ''}`}
-                  style={{ borderColor: settings.text_size === s.id ? 'var(--primary)' : 'var(--border)', backgroundColor: 'var(--surface)' }}
-                  onClick={() => onUpdateSetting('text_size', s.id)}
-                >
+                <SettingButton key={s.id} active={settings.text_size === s.id} onClick={() => onUpdateSetting('text_size', s.id)}>
                   {s.name}
-                </button>
+                </SettingButton>
               ))}
             </div>
-          </div>
+          </SettingSection>
 
           {/* Reciter */}
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: 'var(--text)' }}>Reciter</label>
+          <SettingSection title="Reciter">
             <select 
-              data-testid="reciter-select"
               className="select-dropdown w-full"
               value={settings.reciter_id}
               onChange={e => onUpdateSetting('reciter_id', e.target.value)}
             >
-              {reciters.slice(0, 20).map(r => (
-                <option key={r.id} value={r.id}>{r.reciter_name} - {r.style}</option>
+              {RECITERS.map(r => (
+                <option key={r.id} value={r.id}>{r.name}</option>
               ))}
             </select>
-          </div>
+          </SettingSection>
+
+          {/* Tajweed Colors */}
+          <SettingSection title="Tajweed Colors">
+            <div className="flex gap-2">
+              <SettingButton active={settings.show_tajweed} onClick={() => onUpdateSetting('show_tajweed', true)}>
+                <Eye size={18} /> Show
+              </SettingButton>
+              <SettingButton active={!settings.show_tajweed} onClick={() => onUpdateSetting('show_tajweed', false)}>
+                <EyeOff size={18} /> Hide
+              </SettingButton>
+            </div>
+          </SettingSection>
+
+          {/* View Mode */}
+          <SettingSection title="View Mode">
+            <div className="flex gap-2">
+              <SettingButton active={settings.view_mode === 'scroll'} onClick={() => onUpdateSetting('view_mode', 'scroll')}>
+                <Layers size={18} /> Scroll
+              </SettingButton>
+              <SettingButton active={settings.view_mode === 'book'} onClick={() => onUpdateSetting('view_mode', 'book')}>
+                <BookOpen size={18} /> Book
+              </SettingButton>
+            </div>
+          </SettingSection>
         </div>
       </div>
     </div>
+  );
+}
+
+function SettingSection({ title, children }) {
+  return (
+    <div>
+      <label className="block mb-2 font-medium" style={{ color: 'var(--text)' }}>{title}</label>
+      {children}
+    </div>
+  );
+}
+
+function SettingButton({ active, onClick, children }) {
+  return (
+    <button 
+      className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-all`}
+      style={{ 
+        borderColor: active ? 'var(--primary)' : 'var(--border)', 
+        backgroundColor: active ? 'rgba(4, 120, 87, 0.1)' : 'var(--surface)',
+        color: active ? 'var(--primary)' : 'var(--text)'
+      }}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -1414,19 +1814,13 @@ function HadithModal({ hadithData, ayah, surahName, onClose }) {
             <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Related Hadith</h2>
             <p className="text-sm" style={{ color: 'var(--muted)' }}>{surahName} - Ayah {ayah?.number}</p>
           </div>
-          <button data-testid="close-hadith" className="icon-btn" onClick={onClose}>
-            <X size={20} />
-          </button>
+          <button data-testid="close-hadith" className="icon-btn" onClick={onClose}><X size={20} /></button>
         </div>
 
-        {/* Ayah Reference */}
         <div className="p-4 rounded-lg mb-6" style={{ backgroundColor: 'var(--background)' }}>
-          <p className="font-arabic text-xl leading-loose" style={{ color: 'var(--primary)' }} dir="rtl">
-            {ayah?.arabic}
-          </p>
+          <p className="font-arabic text-xl leading-loose" style={{ color: 'var(--primary)' }} dir="rtl">{ayah?.arabic}</p>
         </div>
 
-        {/* Hadith List */}
         {hadithData?.hadith?.length > 0 ? (
           <div className="space-y-4">
             {hadithData.hadith.map((h, idx) => (
@@ -1440,8 +1834,7 @@ function HadithModal({ hadithData, ayah, surahName, onClose }) {
         ) : (
           <div className="text-center py-8" style={{ color: 'var(--muted)' }}>
             <FileText size={48} className="mx-auto mb-4" />
-            <p>{hadithData?.message || 'No related hadith found for this specific ayah.'}</p>
-            <p className="text-sm mt-2">Try checking the first ayah of the surah for general hadith about this chapter.</p>
+            <p>{hadithData?.message || 'No related hadith found for this ayah.'}</p>
           </div>
         )}
       </div>
