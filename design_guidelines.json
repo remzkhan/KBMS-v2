@@ -1,0 +1,127 @@
+{
+  "identity": {
+    "persona": "E1: The Anti-AI Designer",
+    "mission": "Create a Quran Reader that feels sacred, modern, and deeply focused. Avoid generic 'religious app' tropes (green gradients everywhere). Use texture, typography, and negative space to honor the content.",
+    "principles": [
+      "Fusion: Traditional Islamic calligraphy x Swiss Typography.",
+      "Emotion: Serenity through spacing and color warmth.",
+      "Content First: The Word of God is the hero. UI recedes.",
+      "Contrast: Deep darks for night reading, warm paper tones for day."
+    ]
+  },
+  "typography": {
+    "english": {
+      "primary": "Outfit",
+      "secondary": "Inter",
+      "weights": ["light", "regular", "medium", "bold"]
+    },
+    "arabic": {
+      "primary": "Amiri",
+      "secondary": "Scheherazade New",
+      "notes": "Ensure high line-height (leading-loose) and large font sizes (text-2xl+) for Arabic text legibility."
+    }
+  },
+  "colors": {
+    "light": {
+      "background": "#F7F5F0",
+      "surface": "#FFFFFF",
+      "primary": "#047857",
+      "secondary": "#D4AF37",
+      "text": "#1A1A1A",
+      "muted": "#64748B",
+      "border": "#E2E8F0"
+    },
+    "dark": {
+      "background": "#0F172A",
+      "surface": "#1E293B",
+      "primary": "#10B981",
+      "secondary": "#FBBF24",
+      "text": "#E2E8F0",
+      "muted": "#94A3B8",
+      "border": "#334155"
+    }
+  },
+  "components": {
+    "SurahCard": {
+      "style": "Bento Grid Item",
+      "props": {
+        "padding": "p-6",
+        "border": "border border-border/50",
+        "hover": "hover:border-primary/50 hover:shadow-lg transition-all duration-300",
+        "typography": "English Name (Outfit Bold), Arabic Name (Amiri Large), Meaning (Inter Text-Sm Muted)"
+      }
+    },
+    "ReaderView": {
+      "style": "Focused Reading Column",
+      "props": {
+        "maxWidth": "max-w-3xl",
+        "spacing": "space-y-8",
+        "ayahContainer": "flex flex-col md:flex-row gap-6 p-4 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors",
+        "arabicText": "text-right font-arabic text-3xl leading-[2.5] text-primary dark:text-primary-foreground",
+        "translationText": "text-left font-sans text-lg text-muted-foreground leading-relaxed"
+      }
+    },
+    "AudioPlayer": {
+      "style": "Sticky Bottom Bar",
+      "props": {
+        "position": "fixed bottom-0 left-0 right-0",
+        "background": "bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-border",
+        "padding": "p-4",
+        "layout": "flex items-center justify-between max-w-5xl mx-auto"
+      }
+    },
+    "Navigation": {
+      "style": "Minimal Top Bar",
+      "props": {
+        "background": "bg-transparent",
+        "layout": "flex justify-between items-center p-6",
+        "logo": "font-bold text-xl tracking-tight"
+      }
+    }
+  },
+  "layout": {
+    "grid": {
+      "marketing": "grid-cols-1 md:grid-cols-8 lg:grid-cols-12 gap-8",
+      "dashboard": "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+    },
+    "spacing": {
+      "container": "p-6 md:p-12 lg:p-16",
+      "section": "py-20 md:py-32"
+    }
+  },
+  "assets": {
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1759933634987-089550645d57?crop=entropy&cs=srgb&fm=jpg",
+        "description": "Geometric screen texture for subtle backgrounds",
+        "category": "texture"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1728294087366-d57768c7e0ec?crop=entropy&cs=srgb&fm=jpg",
+        "description": "Open Quran book on stand for Hero/Welcome screen",
+        "category": "hero"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1758696642915-996112fc0bae?crop=entropy&cs=srgb&fm=jpg",
+        "description": "Ornate mosque ceiling for headers or decorative cards",
+        "category": "decoration"
+      }
+    ],
+    "icons": "Use 'lucide-react' for all UI icons (Book, Play, Pause, Settings, Moon, Sun, Search)."
+  },
+  "api": {
+    "endpoints": {
+      "surahList": "https://api.alquran.cloud/v1/surah",
+      "surahDetails": "https://api.alquran.cloud/v1/surah/{number}/editions/quran-uthmani,en.sahih",
+      "audio": "https://api.quran.com/api/v4/chapter_recitations/{reciter_id}/{chapter_id}",
+      "reciters": "https://api.quran.com/api/v4/resources/recitations"
+    },
+    "notes": "Fetch data efficiently. Cache Surah list. Use streaming for audio."
+  },
+  "universal_guidelines": {
+    "setup_instructions": "The /app/frontend folder seems to be missing configuration files (package.json, vite.config.js). You MUST initialize a React+Vite project or restore the missing files before starting implementation. Ensure 'shadcn/ui' components in /app/frontend/src/components/ui are integrated correctly.",
+    "theme_toggle": "Implement a robust ThemeProvider using 'next-themes' or local state that persists to localStorage.",
+    "accessibility": "Ensure all Arabic text has 'lang=\"ar\"' attribute and 'dir=\"rtl\"'. Ensure contrast ratios meet WCAG AA.",
+    "testing": "Add data-testid attributes to all interactive elements (e.g., 'play-button', 'surah-card-{id}', 'theme-toggle')."
+  }
+}
